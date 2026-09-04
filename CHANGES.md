@@ -1,5 +1,10 @@
 # Changelog — local_rubricgrader
 
+## 0.9 (2026-09-04)
+
+- Externalized every user-facing string — the rescale widget, split-view controls, and the grading summary tables written into the student-facing Comment box — into `lang/en/local_rubricgrader.php`, per the Moodle Marketplace guideline against hardcoded text. Strings are resolved via `get_string()` in `lib.php` and passed to `rubric-optimized.js` as a `window.RG_STRINGS` object, read fresh on every use (not cached at script-load time, avoiding the same load-order race fixed earlier in `local_rubricbuilder`'s sesskey handling). The three duplicated "1 mark"/"N marks" pluralization patterns are now a single shared `markLabel()` helper. Internal developer console logging was deliberately left untouched, since it's never seen by end users.
+- Removed ~135 lines of confirmed-dead code (`updateTotal`, `updateMarkField`, `updateVisualFeedback` — the pre-split-view single-table versions, superseded by their `*ForTable` equivalents and never called from anywhere in the codebase). This was flagged during the original code audit and is now actually cleaned up rather than just documented.
+
 ## 0.8 (2026-09-04)
 
 - Bumped `$plugin->requires` from Moodle 4.1 (security support ended Nov 2025 — no longer maintained) to Moodle 4.5 LTS, a version this plugin has actually been tested against.

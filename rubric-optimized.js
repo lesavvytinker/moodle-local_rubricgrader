@@ -14,6 +14,37 @@
             }
         },
 
+        // Looks up a user-facing string from window.RG_STRINGS (populated by
+        // lib.php via get_string()). Read fresh on every call rather than
+        // cached into a variable at script-load time — the same load-order
+        // race we found and fixed in rubric-builder.js's sesskey handling
+        // could otherwise apply here too. Falls back to a hardcoded English
+        // string only if RG_STRINGS somehow isn't available.
+        t: function(key, fallback) {
+            return (typeof window.RG_STRINGS !== 'undefined' && window.RG_STRINGS[key] !== undefined)
+                ? window.RG_STRINGS[key]
+                : fallback;
+        },
+        // Same as t(), but substitutes a single {$a} placeholder.
+        ta: function(key, a, fallback) {
+            return this.t(key, fallback).replace('{$a}', a);
+        },
+        // Same as t(), but substitutes multiple named {$a->xxx} placeholders
+        // given as an object, e.g. {score: 5, max: 10}.
+        tm: function(key, replacements, fallback) {
+            var s = this.t(key, fallback);
+            Object.keys(replacements).forEach(function(k) {
+                s = s.replace('{$a->' + k + '}', replacements[k]);
+            });
+            return s;
+        },
+        // "1 mark" / "{$a} marks" — the same pluralized score label is
+        // built in several places, so it's centralised here.
+        markLabel: function(score) {
+            var n = parseFloat(score);
+            return (n === 1) ? this.t('onemark', '1 mark') : this.ta('nmarks', score, '{$a} marks');
+        },
+
         init: function() {
             var self = this;
             self.log('=== INITIALIZING RUBRIC GRADER ===');
@@ -181,7 +212,7 @@
                 if (score === undefined) return;
                 // Only add if not already present
                 if ($cell.find('.rs-cell-score-badge').length) return;
-                var label = parseFloat(score) === 1 ? '1 mark' : score + ' marks';
+                var label = self.markLabel(score);
                 $cell.prepend('<strong class="rs-cell-score-badge">' + label + '</strong><br class="rgdr-badge-br">');
             });
             if ($table.hasClass('rs-marking-guide')) {
@@ -199,7 +230,7 @@
             var $anchor = $('.que.essay, .que, #page-content, #region-main, .generalbox').first();
             if (!$anchor.length) return;
 
-            var $btn = $('<button type="button" id="rgdr-split-btn" class="rgdr-split-toggle">&#9707; Split View &mdash; student response on left, mark on right</button>');
+            var $btn = $('<button type="button" id="rgdr-split-btn" class="rgdr-split-toggle">&#9707; ' + self.t('splitviewbtn', 'Split View — student response on left, mark on right') + '</button>');
 
             $btn.on('click', function() {
                 self.toggleSplitView();
@@ -218,7 +249,7 @@
                 // Just remove the CSS class — the live page content is untouched
                 $('body').removeClass('rgdr-split-active');
                 $('#rgdr-split-left-panel').remove();
-                $btn.html('&#9707; Split View');
+                $btn.html('&#9707; ' + self.t('splitviewbtncollapsed', 'Split View'));
                 self.log('Split view off');
                 return;
             }
@@ -230,8 +261,8 @@
 
             // Build left panel with iframe showing response only
             var $left = $('<div id="rgdr-split-left-panel"></div>');
-            var $iframe = $('<iframe class="rgdr-split-left-frame" src="' + currentUrl + '" title="Student response"></iframe>');
-            $left.append('<div class="rgdr-split-left-bar">&#128065; Student Response (read only)</div>');
+            var $iframe = $('<iframe class="rgdr-split-left-frame" src="' + currentUrl + '" title="' + self.t('studentresponsetitle', 'Student response') + '"></iframe>');
+            $left.append('<div class="rgdr-split-left-bar">&#128065; ' + self.t('studentresponsereadonly', 'Student Response (read only)') + '</div>');
             $left.append($iframe);
             $('body').prepend($left);
             $('body').addClass('rgdr-split-active');
@@ -293,7 +324,7 @@
                 setTimeout(applyCSS, 1500);
             });
 
-            $btn.html('&#10005; Exit Split View &mdash; save first!');
+            $btn.html('&#10005; ' + self.t('exitsplitviewbtn', 'Exit Split View — save first!'));
             self.log('Split view on');
         },
 
@@ -305,12 +336,12 @@
             var $widget = $([
                 '<div class="rgdr-rescale-wrap">',
                 '  <div class="rgdr-rescale-inner">',
-                '    <span class="rgdr-rescale-label">&#9881; Rescale mark</span>',
-                '    <span class="rgdr-rescale-hint">Enter the question\'s max mark, then click Rescale to convert the rubric total.</span>',
+                '    <span class="rgdr-rescale-label">&#9881; ' + self.t('rescalemark', 'Rescale mark') + '</span>',
+                '    <span class="rgdr-rescale-hint">' + self.t('rescalehint', 'Enter the question\'s max mark, then click Rescale to convert the rubric total.') + '</span>',
                 '    <div class="rgdr-rescale-controls">',
-                '      <label class="rgdr-rescale-field-label">Max mark for this question</label>',
-                '      <input class="rgdr-rescale-max" type="number" min="0" step="0.5" placeholder="e.g. 14">',
-                '      <button type="button" class="rgdr-rescale-btn">Rescale</button>',
+                '      <label class="rgdr-rescale-field-label">' + self.t('maxmarkforquestion', 'Max mark for this question') + '</label>',
+                '      <input class="rgdr-rescale-max" type="number" min="0" step="0.5" placeholder="' + self.t('maxmarkplaceholder', 'e.g. 14') + '">',
+                '      <button type="button" class="rgdr-rescale-btn">' + self.t('rescalebtn', 'Rescale') + '</button>',
                 '      <span class="rgdr-rescale-result" style="display:none;"></span>',
 
                 '    </div>',
@@ -324,7 +355,7 @@
             $widget.find('.rgdr-rescale-btn').on('click', function() {
                 var maxMark = parseFloat($widget.find('.rgdr-rescale-max').val());
                 if (isNaN(maxMark) || maxMark <= 0) {
-                    alert('Please enter a valid max mark greater than 0.');
+                    alert(self.t('errorinvalidmaxmark', 'Please enter a valid max mark greater than 0.'));
                     return;
                 }
 
@@ -370,7 +401,7 @@
                 }
 
                 if (maxPossible <= 0) {
-                    alert('No scores entered yet — please complete the rubric first.');
+                    alert(self.t('errornoscoresyet', 'No scores entered yet — please complete the rubric first.'));
                     return;
                 }
 
@@ -379,7 +410,7 @@
                 $widget.find('.rgdr-rescale-result').html(
                     '<strong>' + total + ' / ' + maxPossible + '</strong>' +
                     ' &rarr; <span class="rgdr-rescale-value">' + scaled + '</span> / ' + maxMark +
-                    ' &nbsp;&mdash;&nbsp; <em>enter <strong>' + scaled + '</strong> in the Mark field below</em>'
+                    ' &nbsp;&mdash;&nbsp; <em>' + self.ta('rescaleenterinstruction', '<strong>' + scaled + '</strong>', 'enter {$a} in the Mark field below') + '</em>'
                 ).show();
             });
         },
@@ -991,19 +1022,18 @@
             //    marker knows to add feedback manually instead of assuming it
             //    was written somewhere it wasn't.
             self.log('❌ writeToCommentArea: no safe target found — feedback NOT written');
-            alert('Rubric Grader: could not confidently locate the correct feedback box for this response, ' +
-                  'so the grading summary was not written automatically. Please copy it into the comment box ' +
-                  'manually, or reload the page and try again.');
+            alert(self.t('errorcouldnotwrite', 'Rubric Grader: could not confidently locate the correct feedback box for this response, so the grading summary was not written automatically. Please copy it into the comment box manually, or reload the page and try again.'));
         },
 
         buildMarkingGuideSummaryHTML: function(breakdown, total, maxPossible, isWMG) {
+            var self = this;
             var s = '<div class="rgdr-summary rs-mg-feedback-wrap">';
-            s += '<p><strong>Marking Guide Summary</strong></p>';
+            s += '<p><strong>' + self.t('markingguidesummarytitle', 'Marking Guide Summary') + '</strong></p>';
             s += '<table class="rgdr-mg-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
             s += '<tr style="background-color:#1565C0;color:white;">';
-            s += '<th style="text-align:left;padding:10px 14px;">Criterion</th>';
-            s += '<th style="text-align:center;padding:10px 14px;">Score</th>';
-            s += '<th style="text-align:left;padding:10px 14px;">Criterion-specific comments</th>';
+            s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionheader', 'Criterion') + '</th>';
+            s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
+            s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
             s += '</tr>';
             breakdown.forEach(function(item, idx) {
                 var bg = (idx % 2 === 0) ? '#ffffff' : '#f5f8ff';
@@ -1016,16 +1046,16 @@
                 s += '</td>';
                 s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:120px;border:1px solid #dde3f0;">';
                 s += '<span style="display:inline-block;background:#1565C0;color:white;font-weight:700;font-size:1.05em;border-radius:5px;padding:3px 14px;min-width:50px;text-align:center;">' + parseFloat(item.score).toFixed(1) + '</span>';
-                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + (isWMG ? 'weight: ' + parseFloat(item.max).toFixed(0) + '%' : 'out of ' + parseFloat(item.max).toFixed(1)) + '</span>';
+                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + (isWMG ? self.ta('weightpercent', parseFloat(item.max).toFixed(0), 'weight: {$a}%') : self.ta('outofmax', parseFloat(item.max).toFixed(1), 'out of {$a}')) + '</span>';
                 s += '</td>';
                 s += '<td style="padding:12px 14px;background-color:#fffde7;vertical-align:top;border:1px solid #dde3f0;min-width:200px;">&nbsp;</td>';
                 s += '</tr>';
             });
             s += '<tr style="background-color:#1565C0;color:white;">';
-            s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">Total</td>';
+            s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
             s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
             s += '<td style="border:none;"></td></tr>';
-            s += '</table><br><p><strong>Overall comments:</strong></p></div>';
+            s += '</table><br><p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
         },
 
@@ -1036,7 +1066,7 @@
             if (!$table || !$table.length) { self.log('⚠️ No $table — returning null'); return null; }
 
             var summary = '<div class="rgdr-summary">';
-            summary += '<p><strong>Rubric Grading Summary</strong></p>';
+            summary += '<p><strong>' + self.t('rubricgradingsummarytitle', 'Rubric Grading Summary') + '</strong></p>';
             
             // Build column headers from the table's thead
             var colHeaders = [];
@@ -1057,11 +1087,11 @@
 
             // Header row
             summary += '<tr style="background-color:#e3f2fd;">';
-            summary += '<th>Criterion</th>';
+            summary += '<th>' + self.t('criterionheader', 'Criterion') + '</th>';
             colHeaders.forEach(function(h) {
                 summary += '<th style="text-align:center;">' + h + '</th>';
             });
-            summary += '<th>Criterion-specific comments</th>';
+            summary += '<th>' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
             summary += '</tr>';
 
             // One row per breakdown item
@@ -1071,7 +1101,7 @@
                 if (item.isWeighted) {
                     criterionLabel += ' (' + item.max + '%)';
                 } else {
-                    criterionLabel += ' (' + item.max + ' mark' + (item.max === 1 ? '' : 's') + ')';
+                    criterionLabel += ' (' + self.markLabel(item.max) + ')';
                 }
                 summary += '<td><strong>' + criterionLabel + '</strong></td>';
 
@@ -1116,7 +1146,7 @@
                                 if (html2 && html2 !== ' ' && html2 !== '&nbsp;') {
                                     var scoreVal2 = $found.attr('data-score');
                                     var scoreVal2Num = parseFloat(scoreVal2);
-                                    var scoreLabel2 = scoreVal2 !== undefined ? (scoreVal2Num === 1 ? '1 mark' : scoreVal2 + ' marks') : '';
+                                    var scoreLabel2 = scoreVal2 !== undefined ? self.markLabel(scoreVal2) : '';
                                     if (isSel) {
                                         var badge2 = scoreLabel2 ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#fff;opacity:1;">' + scoreLabel2 + '</strong>' : '';
                                         summary += '<td style="background:#1565C0;color:white;font-weight:bold;padding:8px;">&#10003;<br>' + badge2 + html2.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '') + '</td>';
@@ -1141,7 +1171,7 @@
                                 if (cHtml && cHtml !== ' ' && cHtml !== '&nbsp;') {
                                     var scoreValC = $cell.attr('data-score');
                                     var scoreValCNum = parseFloat(scoreValC);
-                                    var scoreLabelC = scoreValC !== undefined ? (scoreValCNum === 1 ? '1 mark' : scoreValC + ' marks') : '';
+                                    var scoreLabelC = scoreValC !== undefined ? self.markLabel(scoreValC) : '';
                                     var cleanHtml = cHtml.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '');
                                     if (cSel) {
                                         var badgeC = scoreLabelC ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#fff;opacity:1;">' + scoreLabelC + '</strong>' : '';
@@ -1173,86 +1203,15 @@
             var maxPossibleSummary = breakdown.reduce(function(s, item) { return s + (parseFloat(item.max) || 0); }, 0);
             maxPossibleSummary = Math.round(maxPossibleSummary * 100) / 100;
             if (isWgtSummary) {
-                summary += '<p><strong>Total ' + total + ' / ' + maxPossibleSummary + '%</strong></p>';
+                summary += '<p><strong>' + self.tm('totalscorelinepercent', {score: total, max: maxPossibleSummary}, 'Total {$a->score} / {$a->max}%') + '</strong></p>';
             } else {
-                summary += '<p><strong>Total ' + total + ' / ' + maxPossibleSummary + '</strong></p>';
+                summary += '<p><strong>' + self.tm('totalscoreline', {score: total, max: maxPossibleSummary}, 'Total {$a->score} / {$a->max}') + '</strong></p>';
             }
             summary += '<br>';
-            summary += '<p><strong>Overall comments:</strong></p>';
+            summary += '<p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p>';
             summary += '</div>';
 
             return summary;
-        },
-        
-        updateTotal: function() {
-            var self = this;
-            self.log('');
-            self.log('📊 CALCULATING TOTAL...');
-            
-            var total = 0;
-            var maxPossible = 0;
-            var breakdown = [];
-            var $selected = $('.rs-cell.rgdr-selected');
-            
-            self.log('Selected cells count: ' + $selected.length);
-            
-            if ($selected.length === 0) {
-                self.log('⚠️ No cells selected yet');
-                return;
-            }
-            
-            $selected.each(function(idx) {
-                var $cell = $(this);
-                var scoreAttr = $cell.attr('data-score');
-                var score = parseFloat(scoreAttr);
-                
-                // Find max possible for this row
-                var $row = $cell.closest('tr');
-                var rowMax = self.getRowMaxScore($row);
-                
-                // Get criterion name and check for max marks in the name
-                var criterionCell = $row.find('td:first, th:first');
-                var criterionText = criterionCell.text().trim();
-                var criterionName = self.extractCriterionName(criterionText);
-                var maxFromName = self.extractMaxFromCriterionName(criterionText);
-                
-                // Use max from name if found
-                if (maxFromName !== null) {
-                    rowMax = maxFromName;
-                    self.log('  Using max from criterion name: ' + rowMax);
-                }
-                
-                // Get the full description from the selected cell
-                var description = $cell.text().trim();
-                
-                self.log('  Row ' + (idx + 1) + ': score = ' + score + ' (out of ' + rowMax + ')');
-                self.log('  Description: ' + description.substring(0, 100));
-                
-                if (!isNaN(score)) {
-                    total += score;
-                    maxPossible += rowMax;
-                    
-                    // Store breakdown info with FULL description
-                    breakdown.push({
-                        criterion: criterionName,
-                        score: score,
-                        max: rowMax,
-                        description: description
-                    });
-                } else {
-                    self.log('  ⚠️ Invalid score: ' + scoreAttr);
-                }
-            });
-            
-            self.log('');
-            self.log('🎯 TOTAL SCORE: ' + total + ' / ' + maxPossible + ' marks');
-            self.log('');
-            
-            // Find and update mark input
-            self.updateMarkField(total);
-            
-            // Update visual feedback with full descriptions
-            self.updateVisualFeedback(breakdown, total, maxPossible);
         },
         
         // Extract criterion name without max marks notation
@@ -1411,141 +1370,6 @@
             });
             
             return maxScore;
-        },
-        
-        updateMarkField: function(total) {
-            var self = this;
-            self.log('📝 Looking for mark input field...');
-            
-            // Try multiple selectors
-            var selectors = [
-                'input[name="mark"]',
-                'input[name="grade"]', 
-                'input[id="id_mark"]',
-                'input[id="id_grade"]',
-                '#id_grade',
-                'input[type="text"][name*="mark"]',
-                'input[type="number"][name*="mark"]',
-                'input[type="text"][name*="grade"]'
-            ];
-            
-            var $input = null;
-            
-            for (var i = 0; i < selectors.length; i++) {
-                var $found = $(selectors[i]).filter(':visible');
-                if ($found.length > 0) {
-                    $input = $found.first();
-                    self.log('✅ Found using: ' + selectors[i]);
-                    self.log('   Name: ' + $input.attr('name'));
-                    self.log('   ID: ' + $input.attr('id'));
-                    self.log('   Current value: "' + $input.val() + '"');
-                    break;
-                }
-            }
-            
-            if (!$input || $input.length === 0) {
-                self.log('❌ Mark field not found!');
-                self.log('Available inputs:');
-                $('input:visible').each(function(idx) {
-                    if (idx < 10) { // Limit output
-                        self.log('  ' + idx + ': name="' + this.name + '" id="' + this.id + '"');
-                    }
-                });
-                return;
-            }
-            
-            // Update the field
-            var oldValue = $input.val();
-            $input.val(total);
-            
-            self.log('');
-            self.log('💾 UPDATING MARK FIELD:');
-            self.log('   From: "' + oldValue + '"');
-            self.log('   To: "' + total + '"');
-            
-            // Trigger events
-            $input.trigger('change');
-            $input.trigger('input');
-            $input.trigger('blur');
-            $input.trigger('keyup');
-            
-            // Native events
-            if ($input[0]) {
-                var changeEvent = new Event('change', { bubbles: true });
-                var inputEvent = new Event('input', { bubbles: true });
-                $input[0].dispatchEvent(changeEvent);
-                $input[0].dispatchEvent(inputEvent);
-            }
-            
-            // Verify it worked
-            setTimeout(function() {
-                var newValue = $input.val();
-                if (newValue == total) {
-                    self.log('✅ Mark field updated successfully!');
-                } else {
-                    self.log('⚠️ Mark field value: "' + newValue + '" (expected: "' + total + '")');
-                }
-            }, 100);
-        },
-        
-        updateVisualFeedback: function(breakdown, total, maxPossible) {
-            var self = this;
-            self.log('📄 Updating visual feedback');
-            
-            // Remove any existing summaries
-            $('.rgdr-score-display').remove();
-            $('.rgdr-summary').remove();
-            
-            // Build the summary with FULL descriptions and max marks
-            var summary = '<div class="rgdr-summary">';
-            summary += '<p><strong>Rubric Grading Summary</strong></p>';
-            summary += '<ul>';
-            
-            breakdown.forEach(function(item) {
-                summary += '<li>';
-                // Show criterion with max marks, e.g., "Content (3 marks)"
-                summary += '<strong>' + item.criterion + ' (' + item.max + ' mark' + (item.max === 1 ? '' : 's') + ')</strong>';
-                summary += '<br>';
-                // Show score and description (removed the ": " prefix)
-                summary += item.score + ' mark' + (item.score === 1 ? '' : 's');
-                summary += ' (' + item.description + ')';
-                summary += '</li>';
-            });
-            
-            summary += '</ul>';
-            summary += '<p><strong>Total Score: ' + total + ' mark' + (total === 1 ? '' : 's') + '</strong></p>';
-            summary += '<p><strong>Additional comments:</strong></p>';
-            summary += '</div>';
-            
-            self.log('✅ Summary created with full descriptions and max marks');
-            
-            // Try to update TinyMCE or textarea
-            if (typeof tinyMCE !== "undefined" && tinyMCE.activeEditor) {
-                self.log('Updating TinyMCE editor with summary');
-                tinyMCE.activeEditor.setContent(summary);
-                
-                // Auto-expand TinyMCE editor to 10 lines
-                self.expandTinyMCE();
-            } else {
-                // Try to find a comment textarea or area
-                var $commentArea = $('textarea[name*="comment"]').first();
-                if ($commentArea.length) {
-                    self.log('Updating comment textarea');
-                    // Convert HTML to plain text
-                    var plainText = 'Rubric Grading Summary\n\n';
-                    breakdown.forEach(function(item) {
-                        plainText += item.criterion + ' (' + item.max + ' mark' + (item.max === 1 ? '' : 's') + ')\n';
-                        plainText += item.score + ' mark' + (item.score === 1 ? '' : 's') + '\n';
-                        plainText += '(' + item.description + ')\n\n';
-                    });
-                    plainText += 'Total Score: ' + total + ' mark' + (total === 1 ? '' : 's') + '\n\n';
-                    plainText += 'Additional comments:\n';
-                    $commentArea.val(plainText);
-                    
-                    // Expand textarea to 10 lines
-                    $commentArea.attr('rows', 10);
-                }
-            }
         },
         
         expandTinyMCE: function() {

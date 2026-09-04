@@ -27,3 +27,32 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname']       = 'Rubric Grader';
 $string['privacy:metadata'] = 'The Rubric Grader plugin does not store any personal data. It reads existing quiz attempt data managed by mod_quiz and writes teacher-entered marks back to those same records.';
+
+// Rubric Grader UI strings (used by rubric-optimized.js via RG_STRINGS).
+$string['js_errorcouldnotwrite']    = 'Rubric Grader: could not confidently locate the correct feedback box for this response, so the grading summary was not written automatically. Please copy it into the comment box manually, or reload the page and try again.';
+$string['js_errorinvalidmaxmark']   = 'Please enter a valid max mark greater than 0.';
+$string['js_errornoscoresyet']      = 'No scores entered yet — please complete the rubric first.';
+$string['js_splitviewbtn']          = 'Split View — student response on left, mark on right';
+$string['js_splitviewbtncollapsed'] = 'Split View';
+$string['js_exitsplitviewbtn']      = 'Exit Split View — save first!';
+$string['js_studentresponsereadonly'] = 'Student Response (read only)';
+$string['js_studentresponsetitle']  = 'Student response';
+$string['js_rescalemark']           = 'Rescale mark';
+$string['js_rescalehint']           = 'Enter the question\'s max mark, then click Rescale to convert the rubric total.';
+$string['js_maxmarkforquestion']    = 'Max mark for this question';
+$string['js_maxmarkplaceholder']    = 'e.g. 14';
+$string['js_rescalebtn']            = 'Rescale';
+$string['js_rescaleenterinstruction'] = 'enter {$a} in the Mark field below';
+$string['js_markingguidesummarytitle'] = 'Marking Guide Summary';
+$string['js_criterionheader']       = 'Criterion';
+$string['js_scoreheader']           = 'Score';
+$string['js_criterionspecificcomments'] = 'Criterion-specific comments';
+$string['js_weightpercent']         = 'weight: {$a}%';
+$string['js_outofmax']              = 'out of {$a}';
+$string['js_totalrow']              = 'Total';
+$string['js_overallcomments']       = 'Overall comments:';
+$string['js_rubricgradingsummarytitle'] = 'Rubric Grading Summary';
+$string['js_onemark']               = '1 mark';
+$string['js_nmarks']                = '{$a} marks';
+$string['js_totalscoreline']        = 'Total {$a->score} / {$a->max}';
+$string['js_totalscorelinepercent'] = 'Total {$a->score} / {$a->max}%';
