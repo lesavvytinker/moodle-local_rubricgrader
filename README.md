@@ -2,6 +2,8 @@
 
 A local plugin that enhances the manual grading interface for quiz essay questions, allowing teachers to click-to-select rubric cells or confirm marking guide scores, with automatic population of the student feedback comment box.
 
+> **Designed to work with rubrics built using the companion [Rubric Builder](https://github.com/lesavvytinker/moodle-local_rubricbuilder) plugin.** Install both for the complete experience — Rubric Grader activates automatically on any rubric table Rubric Builder generates. It will also work with a hand-coded HTML table using the same CSS classes, but in practice Rubric Builder is by far the easiest way to produce compatible content.
+
 ## Features
 
 - **Rubric grading** — click a cell in a rubric table to select it; scores are totalled automatically and written to the mark field.
