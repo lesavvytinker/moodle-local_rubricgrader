@@ -1,5 +1,13 @@
 # Changelog — local_rubricgrader
 
+## 0.12 (2026-09-08)
+
+- Reworked Checklist mode grading to match Rubric mode's click-a-value interaction: click an item's "Achieved" cell to award its full points (click again to undo), rather than typing a score and confirming. Removed partial credit and the per-item remark field entirely — an item is either achieved or it isn't. Student-facing summary now shows a clear achieved/not-achieved indicator per item instead of a remark column.
+
+## 0.11 (2026-09-08)
+
+- Added grading support for the new **Checklist** mode from Rubric Builder 0.12: click-to-confirm partial-credit scoring per item (same "type a score, confirm" UX as Marking Guide), automatic mark-field totalling, and a dedicated student-facing summary grouped by section, including each item's remark. Uses entirely dedicated `rgdr-cl-*` selectors throughout rather than sharing Marking Guide's classes, specifically to avoid any risk of cross-talk with existing unscoped `.rs-score-input`/`.rs-max-input` queries elsewhere in this file.
+
 ## 0.10 (2026-09-08)
 
 - README: added a more prominent note on the relationship with the companion `local_rubricbuilder` plugin — this plugin is designed to work with rubrics built there, and installing both gives the complete experience.

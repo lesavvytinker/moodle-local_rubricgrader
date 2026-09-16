@@ -93,6 +93,8 @@ function local_rubricgrader_before_http_headers(): void {
             'nmarks'                  => get_string('js_nmarks', 'local_rubricgrader', '__A__'),
             'totalscoreline'          => get_string('js_totalscoreline', 'local_rubricgrader', $sentinelobj),
             'totalscorelinepercent'   => get_string('js_totalscorelinepercent', 'local_rubricgrader', $sentinelobj),
+            'checklistsummarytitle'   => get_string('js_checklistsummarytitle', 'local_rubricgrader'),
+            'itemheader'              => get_string('js_itemheader', 'local_rubricgrader'),
         ];
         foreach ($strings as $key => $value) {
             $value = str_replace('__A__', '{$a}', $value);

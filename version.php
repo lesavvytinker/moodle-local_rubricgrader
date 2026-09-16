@@ -26,7 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_rubricgrader';
-$plugin->version   = 2026090307;
+$plugin->version   = 2026090309;
 $plugin->requires  = 2024100700; // Moodle 4.5 LTS+ (bumped from 4.1, which is no longer security-maintained)
 $plugin->maturity  = MATURITY_BETA;
-$plugin->release   = '0.10';
+$plugin->release   = '0.12';

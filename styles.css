@@ -419,6 +419,114 @@ body.rgdr-grading-page textarea[name*="comment"] {
     background-color: #e8f5e9 !important;
 }
 
+/* ── Checklist mode ──────────────────────────────────────────────────── */
+/* Deliberately its own set of classes rather than sharing .rs-cell etc.
+   with Rubric mode — several total-calculation code paths elsewhere in
+   this file query those classes without row-scoping, and reusing them
+   risked exactly the kind of cross-talk bug this whole plugin has spent a
+   lot of effort hunting down. A little style duplication is a fair trade
+   for zero chance of a checklist cell being silently double-counted by
+   unrelated logic. */
+.rgdr-checklist thead th {
+    background-color: #92400e !important;
+    color: white !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    padding: 10px 14px !important;
+    border: none !important;
+}
+
+.rgdr-checklist thead th:first-child { text-align: left !important; }
+
+.rgdr-cl-section-row td {
+    background-color: #fffbeb !important;
+    font-weight: 700 !important;
+    color: #92400e !important;
+    padding: 8px 14px !important;
+    border: 1px solid #f3e2b8 !important;
+}
+
+.rgdr-cl-item-row td {
+    border: 1px solid #f3e2b8 !important;
+    vertical-align: middle !important;
+    padding: 10px 14px !important;
+    background-color: #ffffff;
+}
+
+.rgdr-cl-item-label-cell {
+    background-color: #fefcf5 !important;
+    font-weight: bold !important;
+    width: 75%;
+    vertical-align: top !important;
+    padding-top: 12px !important;
+}
+
+.rgdr-cl-item-label {
+    display: block;
+    font-weight: 700;
+    color: #78350f;
+    margin-bottom: 4px;
+}
+
+.rgdr-cl-item-desc {
+    display: block;
+    font-weight: normal;
+    font-size: 0.88em;
+    color: #555;
+    line-height: 1.45;
+}
+
+/* The clickable "Achieved" cell — click to toggle it on (full marks) or
+   off (zero), same click-a-value interaction as Rubric mode's cells. */
+.rgdr-cl-item-cell {
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    position: relative !important;
+    border: 3px solid transparent !important;
+    text-align: center !important;
+    font-weight: 700 !important;
+    color: #92400e !important;
+    background-color: #fdf1d8 !important;
+    width: 110px;
+}
+
+.rgdr-cl-item-cell:hover,
+.rgdr-cl-item-cell.rgdr-cl-hover {
+    background-color: #fde68a !important;
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5) !important;
+    transform: scale(1.03) !important;
+    z-index: 10 !important;
+}
+
+.rgdr-cl-item-cell.rgdr-cl-selected {
+    background-color: #92400e !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    border-color: #78350f !important;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 0 20px rgba(146, 64, 14, 0.6) !important;
+    transform: scale(1.02) !important;
+    z-index: 5 !important;
+}
+
+.rgdr-cl-item-cell.rgdr-cl-selected::before {
+    content: "✓ ";
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.rgdr-checklist tr.rgdr-row-confirmed td.rgdr-cl-item-label-cell {
+    background-color: #fffaf0 !important;
+}
+
+.rgdr-cl-total-row td {
+    background-color: #92400e !important;
+    color: white !important;
+    font-weight: bold !important;
+    padding: 10px 14px !important;
+    border: none !important;
+}
+
 .rs-marking-guide thead th {
     background-color: #1565C0 !important;
     color: white !important;

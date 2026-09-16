@@ -511,6 +511,23 @@
                     self.confirmRow($row, $table);
                 }
             });
+
+            // CHECKLIST: click a cell to toggle it achieved/not-achieved.
+            // Unlike Rubric mode's cells (several per row, click one to
+            // select it, deselecting its siblings), each checklist item has
+            // exactly one cell — so clicking TOGGLES it, since there's no
+            // sibling cell to click instead if you want to undo a mistake.
+            $(document).on('click.rubricgrader', '.rgdr-cl-item-cell', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var $cell = $(this);
+                $cell.toggleClass('rgdr-cl-selected');
+                self.log('Checklist item toggled: ' + ($cell.hasClass('rgdr-cl-selected') ? 'achieved' : 'not achieved'));
+                var $row   = $cell.closest('tr.rgdr-cl-item-row');
+                $row.toggleClass('rgdr-row-confirmed', $cell.hasClass('rgdr-cl-selected'));
+                var $table = $cell.closest('.rgdr-checklist');
+                if ($table.length) self.updateTotalForTable($table);
+            });
             
             // HOVER EFFECTS
             $(document).on('mouseenter.rubricgrader', '.rs-cell', function() {
@@ -520,6 +537,14 @@
             
             $(document).on('mouseleave.rubricgrader', '.rs-cell', function() {
                 $(this).removeClass('rgdr-hover');
+            });
+
+            $(document).on('mouseenter.rubricgrader', '.rgdr-cl-item-cell', function() {
+                $(this).addClass('rgdr-cl-hover');
+            });
+
+            $(document).on('mouseleave.rubricgrader', '.rgdr-cl-item-cell', function() {
+                $(this).removeClass('rgdr-cl-hover');
             });
             
             // CLICK HANDLER
@@ -574,6 +599,57 @@
             var total = 0;
             var maxPossible = 0;
             var breakdown = [];
+
+            // ── CHECKLIST MODE ────────────────────────────────────────────
+            // Every item's data-score counts toward maxPossible regardless
+            // of whether it's been clicked yet (same reasoning as the
+            // rubric fix earlier: an ungraded item should shrink the
+            // visible total, not silently vanish from the denominator).
+            // An item's own score is its full data-score if the marker has
+            // toggled it "achieved" (rgdr-cl-selected), otherwise zero —
+            // there's no partial credit and no remark field to read here.
+            if ($table.hasClass('rgdr-checklist')) {
+                self.log('  → checklist mode');
+                var currentSection = '';
+                $table.find('tr.rgdr-cl-section-row, tr.rgdr-cl-item-row').each(function() {
+                    var $row = $(this);
+                    if ($row.hasClass('rgdr-cl-section-row')) {
+                        currentSection = $row.find('.rgdr-cl-section-label').text().trim();
+                        return;
+                    }
+                    var itemLabel = $row.find('.rgdr-cl-item-label').text().trim();
+                    var itemDesc  = $row.find('.rgdr-cl-item-desc').text().trim();
+                    var $cell = $row.find('.rgdr-cl-item-cell');
+                    var mx = parseFloat($cell.attr('data-score')) || 0;
+                    var achieved = $cell.hasClass('rgdr-cl-selected');
+                    var sc = achieved ? mx : 0;
+                    maxPossible += mx;
+                    total += sc;
+                    breakdown.push({
+                        section: currentSection,
+                        criterion: itemLabel,
+                        description: itemDesc,
+                        score: sc,
+                        max: mx,
+                        achieved: achieved
+                    });
+                });
+                self.log('CHECKLIST TOTAL: ' + total + ' / ' + maxPossible);
+                try {
+                    self.updateMarkFieldForTable($table, total, maxPossible);
+                } catch (err) {
+                    self.log('❌ updateMarkFieldForTable threw: ' + (err && err.message));
+                    if (window.console && console.error) console.error('RubricGrader: updateMarkFieldForTable failed', err);
+                }
+                try {
+                    self.updateVisualFeedbackForTable($table, breakdown, total, maxPossible);
+                } catch (err) {
+                    self.log('❌ updateVisualFeedbackForTable threw: ' + (err && err.message));
+                    if (window.console && console.error) console.error('RubricGrader: updateVisualFeedbackForTable failed', err);
+                }
+                return;
+            }
+            // ─────────────────────────────────────────────────────────────
 
             // ── MARKING GUIDE MODE ────────────────────────────────────────
             if ($table.hasClass('rs-marking-guide') || $table.hasClass('rs-wmg')) {
@@ -907,6 +983,13 @@
             var self = this;
             self.log('📄 updateVisualFeedbackForTable called');
 
+            // ── CHECKLIST: dedicated output ──────────────────────────────
+            if ($table.hasClass('rgdr-checklist')) {
+                self.log('  → checklist feedback path');
+                var clHTML = self.buildChecklistSummaryHTML(breakdown, total, maxPossible);
+                self.writeToCommentArea($table, clHTML);
+                return;
+            }
             // ── MARKING GUIDE: dedicated output ──────────────────────────
             if ($table.hasClass('rs-marking-guide')) {
                 self.log('  → marking guide feedback path');
@@ -1055,6 +1138,52 @@
             s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
             s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
             s += '<td style="border:none;"></td></tr>';
+            s += '</table><br><p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
+            return s;
+        },
+
+        // Checklist mode's summary groups items under their section headers
+        // (breakdown items already carry a 'section' field set while
+        // updateTotalForTable walked the table) and shows each item as
+        // clearly achieved or not — there's no remark or partial score to
+        // display, just whether the item was awarded its full points.
+        buildChecklistSummaryHTML: function(breakdown, total, maxPossible) {
+            var self = this;
+            var s = '<div class="rgdr-summary rgdr-cl-feedback-wrap">';
+            s += '<p><strong>' + self.t('checklistsummarytitle', 'Checklist Summary') + '</strong></p>';
+            s += '<table class="rgdr-cl-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
+            s += '<tr style="background-color:#92400e;color:white;">';
+            s += '<th style="text-align:left;padding:10px 14px;">' + self.t('itemheader', 'Item') + '</th>';
+            s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
+            s += '</tr>';
+            var lastSection = null;
+            breakdown.forEach(function(item, idx) {
+                if (item.section && item.section !== lastSection) {
+                    lastSection = item.section;
+                    s += '<tr style="background-color:#fffbeb;"><td colspan="2" style="padding:8px 14px;font-weight:700;color:#92400e;border:1px solid #dde3f0;">' + item.section + '</td></tr>';
+                }
+                var bg = (idx % 2 === 0) ? '#ffffff' : '#fffdf5';
+                s += '<tr style="background-color:' + bg + ';">';
+                s += '<td style="padding:12px 14px;vertical-align:top;width:70%;border:1px solid #dde3f0;">';
+                s += '<p style="margin:0 0 4px 0;font-weight:700;color:#78350f;">' + item.criterion + '</p>';
+                if (item.description) {
+                    s += '<p style="margin:0;font-weight:normal;font-size:0.88em;color:#555;line-height:1.45;">' + item.description + '</p>';
+                }
+                s += '</td>';
+                s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:140px;border:1px solid #dde3f0;">';
+                if (item.achieved) {
+                    s += '<span style="display:inline-block;background:#43a047;color:white;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10003; ' + parseFloat(item.score).toFixed(1) + '</span>';
+                } else {
+                    s += '<span style="display:inline-block;background:#e5e7eb;color:#6b7280;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10007; 0.0</span>';
+                }
+                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + self.ta('outofmax', parseFloat(item.max).toFixed(1), 'out of {$a}') + '</span>';
+                s += '</td>';
+                s += '</tr>';
+            });
+            s += '<tr style="background-color:#92400e;color:white;">';
+            s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
+            s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
+            s += '</tr>';
             s += '</table><br><p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
         },

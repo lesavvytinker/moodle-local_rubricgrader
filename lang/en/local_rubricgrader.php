@@ -56,3 +56,5 @@ $string['js_onemark']               = '1 mark';
 $string['js_nmarks']                = '{$a} marks';
 $string['js_totalscoreline']        = 'Total {$a->score} / {$a->max}';
 $string['js_totalscorelinepercent'] = 'Total {$a->score} / {$a->max}%';
+$string['js_checklistsummarytitle'] = 'Checklist Summary';
+$string['js_itemheader']            = 'Item';
