@@ -1,5 +1,13 @@
 # Changelog — local_rubricgrader
 
+## 0.14 (2026-09-15)
+
+- Fixed the "Checklist Summary"/"Marking Guide Summary"/"Rubric Grading Summary" title and the closing "Overall comments:" text always showing the Rubric colour regardless of which mode actually generated the summary — they shared one generic CSS rule left over from before per-mode theming existed. Each now explicitly uses its own mode's colour, matching the rest of that summary table.
+
+## 0.13 (2026-09-08)
+
+- Added admin settings (Site administration → Plugins → Local plugins → Rubric Grader): a colour picker for each of the three modes — Rubric, Marking Guide, Checklist. Drives the grading interface's header rows, selected/achieved-item colours, and total rows, plus the same colours baked into the student-facing feedback summary at the moment it's written (so the colour is fixed to whatever the admin had set at grading time, and doesn't depend on this plugin being loaded later when the student views their own feedback). Independent of Rubric Builder's own colour settings of the same name, since either plugin works standalone.
+
 ## 0.12 (2026-09-08)
 
 - Reworked Checklist mode grading to match Rubric mode's click-a-value interaction: click an item's "Achieved" cell to award its full points (click again to undo), rather than typing a score and confirming. Removed partial credit and the per-item remark field entirely — an item is either achieved or it isn't. Student-facing summary now shows a clear achieved/not-achieved indicator per item instead of a remark column.

@@ -45,6 +45,20 @@
             return (n === 1) ? this.t('onemark', '1 mark') : this.ta('nmarks', score, '{$a} marks');
         },
 
+        // Reads a mode's admin-configured colour from window.RG_COLORS
+        // (populated by lib.php via get_config()), read fresh each call for
+        // the same load-order-safety reason as t()/ta(). Used specifically
+        // by the buildXXXSummaryHTML functions, which bake the literal hex
+        // value directly into the inline-styled HTML written to the
+        // student's feedback — that HTML can be viewed later on a page this
+        // plugin never loads on, so it can't rely on the CSS variable
+        // still being in scope there the way styles.css itself can.
+        color: function(mode, fallback) {
+            return (typeof window.RG_COLORS !== 'undefined' && window.RG_COLORS[mode])
+                ? window.RG_COLORS[mode]
+                : fallback;
+        },
+
         init: function() {
             var self = this;
             self.log('=== INITIALIZING RUBRIC GRADER ===');
@@ -1110,10 +1124,11 @@
 
         buildMarkingGuideSummaryHTML: function(breakdown, total, maxPossible, isWMG) {
             var self = this;
+            var mgc = self.color('markingguide', '#1565C0');
             var s = '<div class="rgdr-summary rs-mg-feedback-wrap">';
-            s += '<p><strong>' + self.t('markingguidesummarytitle', 'Marking Guide Summary') + '</strong></p>';
+            s += '<p><strong style="color:' + mgc + ';">' + self.t('markingguidesummarytitle', 'Marking Guide Summary') + '</strong></p>';
             s += '<table class="rgdr-mg-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
-            s += '<tr style="background-color:#1565C0;color:white;">';
+            s += '<tr style="background-color:' + mgc + ';color:white;">';
             s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionheader', 'Criterion') + '</th>';
             s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
             s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
@@ -1128,17 +1143,17 @@
                 }
                 s += '</td>';
                 s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:120px;border:1px solid #dde3f0;">';
-                s += '<span style="display:inline-block;background:#1565C0;color:white;font-weight:700;font-size:1.05em;border-radius:5px;padding:3px 14px;min-width:50px;text-align:center;">' + parseFloat(item.score).toFixed(1) + '</span>';
+                s += '<span style="display:inline-block;background:' + mgc + ';color:white;font-weight:700;font-size:1.05em;border-radius:5px;padding:3px 14px;min-width:50px;text-align:center;">' + parseFloat(item.score).toFixed(1) + '</span>';
                 s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + (isWMG ? self.ta('weightpercent', parseFloat(item.max).toFixed(0), 'weight: {$a}%') : self.ta('outofmax', parseFloat(item.max).toFixed(1), 'out of {$a}')) + '</span>';
                 s += '</td>';
                 s += '<td style="padding:12px 14px;background-color:#fffde7;vertical-align:top;border:1px solid #dde3f0;min-width:200px;">&nbsp;</td>';
                 s += '</tr>';
             });
-            s += '<tr style="background-color:#1565C0;color:white;">';
+            s += '<tr style="background-color:' + mgc + ';color:white;">';
             s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
             s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
             s += '<td style="border:none;"></td></tr>';
-            s += '</table><br><p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
+            s += '</table><br><p><strong style="color:' + mgc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
         },
 
@@ -1149,10 +1164,11 @@
         // display, just whether the item was awarded its full points.
         buildChecklistSummaryHTML: function(breakdown, total, maxPossible) {
             var self = this;
+            var clc = self.color('checklist', '#92400e');
             var s = '<div class="rgdr-summary rgdr-cl-feedback-wrap">';
-            s += '<p><strong>' + self.t('checklistsummarytitle', 'Checklist Summary') + '</strong></p>';
+            s += '<p><strong style="color:' + clc + ';">' + self.t('checklistsummarytitle', 'Checklist Summary') + '</strong></p>';
             s += '<table class="rgdr-cl-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
-            s += '<tr style="background-color:#92400e;color:white;">';
+            s += '<tr style="background-color:' + clc + ';color:white;">';
             s += '<th style="text-align:left;padding:10px 14px;">' + self.t('itemheader', 'Item') + '</th>';
             s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
             s += '</tr>';
@@ -1160,7 +1176,7 @@
             breakdown.forEach(function(item, idx) {
                 if (item.section && item.section !== lastSection) {
                     lastSection = item.section;
-                    s += '<tr style="background-color:#fffbeb;"><td colspan="2" style="padding:8px 14px;font-weight:700;color:#92400e;border:1px solid #dde3f0;">' + item.section + '</td></tr>';
+                    s += '<tr style="background-color:#fffbeb;"><td colspan="2" style="padding:8px 14px;font-weight:700;color:' + clc + ';border:1px solid #dde3f0;">' + item.section + '</td></tr>';
                 }
                 var bg = (idx % 2 === 0) ? '#ffffff' : '#fffdf5';
                 s += '<tr style="background-color:' + bg + ';">';
@@ -1172,7 +1188,7 @@
                 s += '</td>';
                 s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:140px;border:1px solid #dde3f0;">';
                 if (item.achieved) {
-                    s += '<span style="display:inline-block;background:#43a047;color:white;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10003; ' + parseFloat(item.score).toFixed(1) + '</span>';
+                    s += '<span style="display:inline-block;background:' + clc + ';color:white;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10003; ' + parseFloat(item.score).toFixed(1) + '</span>';
                 } else {
                     s += '<span style="display:inline-block;background:#e5e7eb;color:#6b7280;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10007; 0.0</span>';
                 }
@@ -1180,22 +1196,23 @@
                 s += '</td>';
                 s += '</tr>';
             });
-            s += '<tr style="background-color:#92400e;color:white;">';
+            s += '<tr style="background-color:' + clc + ';color:white;">';
             s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
             s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
             s += '</tr>';
-            s += '</table><br><p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
+            s += '</table><br><p><strong style="color:' + clc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
         },
 
         buildSummaryHTML: function(breakdown, total, maxPossible, $table) {
             var self = this;
+            var rc = self.color('rubric', '#1565C0');
             self.log('🔷 buildSummaryHTML called: breakdown.length=' + breakdown.length + ' total=' + total + ' $table=' + ($table && $table.length ? $table[0].className : 'NULL'));
             if (!breakdown.length) { self.log('⚠️ Empty breakdown — returning null'); return null; }
             if (!$table || !$table.length) { self.log('⚠️ No $table — returning null'); return null; }
 
             var summary = '<div class="rgdr-summary">';
-            summary += '<p><strong>' + self.t('rubricgradingsummarytitle', 'Rubric Grading Summary') + '</strong></p>';
+            summary += '<p><strong style="color:' + rc + ';">' + self.t('rubricgradingsummarytitle', 'Rubric Grading Summary') + '</strong></p>';
             
             // Build column headers from the table's thead
             var colHeaders = [];
@@ -1215,7 +1232,7 @@
             summary += '<table class="rgdr-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;">';
 
             // Header row
-            summary += '<tr style="background-color:#e3f2fd;">';
+            summary += '<tr style="background-color:color-mix(in srgb, ' + rc + ' 15%, white);">';
             summary += '<th>' + self.t('criterionheader', 'Criterion') + '</th>';
             colHeaders.forEach(function(h) {
                 summary += '<th style="text-align:center;">' + h + '</th>';
@@ -1278,7 +1295,7 @@
                                     var scoreLabel2 = scoreVal2 !== undefined ? self.markLabel(scoreVal2) : '';
                                     if (isSel) {
                                         var badge2 = scoreLabel2 ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#fff;opacity:1;">' + scoreLabel2 + '</strong>' : '';
-                                        summary += '<td style="background:#1565C0;color:white;font-weight:bold;padding:8px;">&#10003;<br>' + badge2 + html2.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '') + '</td>';
+                                        summary += '<td style="background:' + rc + ';color:white;font-weight:bold;padding:8px;">&#10003;<br>' + badge2 + html2.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '') + '</td>';
                                     } else {
                                         var badge2u = scoreLabel2 ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#1a237e;">' + scoreLabel2 + '</strong>' : '';
                                         summary += '<td style="background:#f5f5f5;padding:8px;">' + badge2u + html2.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '') + '</td>';
@@ -1304,7 +1321,7 @@
                                     var cleanHtml = cHtml.replace(/<strong[^>]*class="rs-cell-score-badge"[^>]*>[\s\S]*?<\/strong><br[^>]*>/i, '');
                                     if (cSel) {
                                         var badgeC = scoreLabelC ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#fff;opacity:1;">' + scoreLabelC + '</strong>' : '';
-                                        summary += '<td style="background:#1565C0;color:white;font-weight:bold;padding:8px;">&#10003;<br>' + badgeC + cleanHtml + '</td>';
+                                        summary += '<td style="background:' + rc + ';color:white;font-weight:bold;padding:8px;">&#10003;<br>' + badgeC + cleanHtml + '</td>';
                                     } else {
                                         var badgeCu = scoreLabelC ? '<strong style="display:block;font-size:0.8em;margin-bottom:4px;color:#1a237e;">' + scoreLabelC + '</strong>' : '';
                                         summary += '<td style="background:#f5f5f5;padding:8px;">' + badgeCu + cleanHtml + '</td>';
@@ -1337,7 +1354,7 @@
                 summary += '<p><strong>' + self.tm('totalscoreline', {score: total, max: maxPossibleSummary}, 'Total {$a->score} / {$a->max}') + '</strong></p>';
             }
             summary += '<br>';
-            summary += '<p><strong>' + self.t('overallcomments', 'Overall comments:') + '</strong></p>';
+            summary += '<p><strong style="color:' + rc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p>';
             summary += '</div>';
 
             return summary;

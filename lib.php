@@ -103,7 +103,22 @@ function local_rubricgrader_before_http_headers(): void {
             $strings[$key] = $value;
         }
         $PAGE->requires->js_init_code(
-            'window.RG_STRINGS = ' . json_encode($strings) . ';',
+            'window.RG_STRINGS = ' . json_encode($strings) . ';' .
+            // Colour settings, one per mode — independent of
+            // local_rubricbuilder's own settings of the same name, since
+            // either plugin should work standalone. get_config() returns
+            // false if never saved, so each falls back to the same default
+            // declared in settings.php. Exposed as a plain object (not just
+            // a CSS variable) because the student-facing summary HTML bakes
+            // these in as literal hex values at grading time — that HTML
+            // can be viewed later on a page this plugin never loads on (the
+            // student's own review page), so it can't depend on a CSS
+            // variable still being in scope there.
+            'window.RG_COLORS = ' . json_encode([
+                'rubric'       => get_config('local_rubricgrader', 'rubriccolor') ?: '#1a56db',
+                'markingguide' => get_config('local_rubricgrader', 'markingguidecolor') ?: '#059669',
+                'checklist'    => get_config('local_rubricgrader', 'checklistcolor') ?: '#92400e',
+            ]) . ';',
             true
         );
 
@@ -116,6 +131,10 @@ function local_rubricgrader_before_http_headers(): void {
             'l.rel="stylesheet";l.type="text/css";' .
             'l.href=' . json_encode($cssurl->out(false)) . ';' .
             'document.head.appendChild(l);' .
+            'var c=window.RG_COLORS||{};' .
+            'var s=document.createElement("style");' .
+            's.textContent=":root{--rgdr-rubric-color:"+(c.rubric||"#1a56db")+";--rgdr-mg-color:"+(c.markingguide||"#059669")+";--rgdr-cl-color:"+(c.checklist||"#92400e")+";}";' .
+            'document.head.appendChild(s);' .
             '})();',
             true
         );

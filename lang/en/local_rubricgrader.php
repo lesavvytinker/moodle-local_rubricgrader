@@ -26,6 +26,15 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname']       = 'Rubric Grader';
+
+// Admin settings (colour customization per mode). Independent of
+// local_rubricbuilder's own settings of the same name.
+$string['settings_rubriccolor']            = 'Rubric colour';
+$string['settings_rubriccolor_desc']       = 'The primary colour used for Rubric mode\'s grading interface and the student-facing feedback summary. Drives the selected-cell colour, the summary table\'s header, and the total row.';
+$string['settings_markingguidecolor']      = 'Marking Guide colour';
+$string['settings_markingguidecolor_desc'] = 'The primary colour used for Marking Guide mode\'s grading interface and the student-facing feedback summary. Drives the score-cell highlight, the summary table\'s header, and the total row.';
+$string['settings_checklistcolor']         = 'Checklist colour';
+$string['settings_checklistcolor_desc']    = 'The primary colour used for Checklist mode\'s grading interface and the student-facing feedback summary. Drives the achieved-item colour, the summary table\'s header, and the total row.';
 $string['privacy:metadata'] = 'The Rubric Grader plugin does not store any personal data. It reads existing quiz attempt data managed by mod_quiz and writes teacher-entered marks back to those same records.';
 
 // Rubric Grader UI strings (used by rubric-optimized.js via RG_STRINGS).
