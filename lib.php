@@ -67,19 +67,12 @@ function local_rubricgrader_before_http_headers(): void {
         $sentinelobj = (object) ['score' => '__SCORE__', 'max' => '__MAX__'];
         $strings = [
             'errorcouldnotwrite'      => get_string('js_errorcouldnotwrite', 'local_rubricgrader'),
-            'errorinvalidmaxmark'     => get_string('js_errorinvalidmaxmark', 'local_rubricgrader'),
-            'errornoscoresyet'        => get_string('js_errornoscoresyet', 'local_rubricgrader'),
             'splitviewbtn'            => get_string('js_splitviewbtn', 'local_rubricgrader'),
             'splitviewbtncollapsed'   => get_string('js_splitviewbtncollapsed', 'local_rubricgrader'),
             'exitsplitviewbtn'        => get_string('js_exitsplitviewbtn', 'local_rubricgrader'),
             'studentresponsereadonly' => get_string('js_studentresponsereadonly', 'local_rubricgrader'),
             'studentresponsetitle'    => get_string('js_studentresponsetitle', 'local_rubricgrader'),
-            'rescalemark'             => get_string('js_rescalemark', 'local_rubricgrader'),
-            'rescalehint'             => get_string('js_rescalehint', 'local_rubricgrader'),
-            'maxmarkforquestion'      => get_string('js_maxmarkforquestion', 'local_rubricgrader'),
-            'maxmarkplaceholder'      => get_string('js_maxmarkplaceholder', 'local_rubricgrader'),
-            'rescalebtn'              => get_string('js_rescalebtn', 'local_rubricgrader'),
-            'rescaleenterinstruction' => get_string('js_rescaleenterinstruction', 'local_rubricgrader', '__A__'),
+            'jumptostudent'           => get_string('js_jumptostudent', 'local_rubricgrader'),
             'markingguidesummarytitle' => get_string('js_markingguidesummarytitle', 'local_rubricgrader'),
             'criterionheader'         => get_string('js_criterionheader', 'local_rubricgrader'),
             'scoreheader'             => get_string('js_scoreheader', 'local_rubricgrader'),
@@ -95,6 +88,13 @@ function local_rubricgrader_before_http_headers(): void {
             'totalscorelinepercent'   => get_string('js_totalscorelinepercent', 'local_rubricgrader', $sentinelobj),
             'checklistsummarytitle'   => get_string('js_checklistsummarytitle', 'local_rubricgrader'),
             'itemheader'              => get_string('js_itemheader', 'local_rubricgrader'),
+            'addcomment'              => get_string('js_addcomment', 'local_rubricgrader'),
+            'editcomment'             => get_string('js_editcomment', 'local_rubricgrader'),
+            'commentplaceholder'      => get_string('js_commentplaceholder', 'local_rubricgrader'),
+            'save'                    => get_string('js_save', 'local_rubricgrader'),
+            'remove'                  => get_string('js_remove', 'local_rubricgrader'),
+            'allornoneawarded'        => get_string('js_allornoneawarded', 'local_rubricgrader'),
+            'allornonenotawarded'     => get_string('js_allornonenotawarded', 'local_rubricgrader'),
         ];
         foreach ($strings as $key => $value) {
             $value = str_replace('__A__', '{$a}', $value);

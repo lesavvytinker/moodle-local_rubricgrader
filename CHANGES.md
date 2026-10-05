@@ -1,5 +1,53 @@
 # Changelog — local_rubricgrader
 
+## 0.26 (2026-10-05)
+
+- Fixed: the Rubric Grading Summary (standard/legacy rubric formats) could show the wrong score for a selected cell — e.g. a criterion actually graded at 2.5 marks displaying as 7.5 — whenever two criterion rows in the same rubric used different point scales (such as a 20-mark criterion alongside 10-mark ones). The summary matched each cell to its column by its raw score value against a map built from just one "first" row, so a value that happened to reappear in a different column of that first row (7.5 there vs. 2.5 in the actual row) got misattributed. Column matching is now positional first (each row's own cell at that physical position), falling back to the old value-matching only for a row that genuinely has fewer cells than the header.
+
+## 0.25 (2026-10-04)
+
+- Added support for Checklist mode's new "All checked or 0" section option (local_rubricbuilder 0.15+): a section flagged that way is now scored as one all-or-nothing block — its full points only if every item in it is checked, otherwise 0 for the whole section — instead of totalling each item on its own. The Checklist Summary now shows a small note next to each such section's heading saying whether it was awarded in full or scored 0. Sections without the flag total exactly as before, one item at a time.
+
+## 0.24 (2026-09-29)
+
+- Scores and totals now display to 2 decimal places everywhere, instead of 1 — Marking Guide's score input field, its confirmed values, and all three modes' generated feedback summaries (score badges, "out of X", and total rows). The Mark field itself was already scaling to 2 decimals; this brings the on-screen display in line with it.
+
+## 0.23 (2026-09-29)
+
+- Fixed Split View's student-name detection (0.22) not finding any names on Moodle's quiz manual-grading report page, so the "Jump to…" list came up empty on pages with multiple submissions. That page identifies each response with a plain-text (non-link) heading reading "Attempt number N for Full Name (email)" — a different pattern than the profile-link heuristic 0.22 relied on. Now matches that heading directly, checking both just before a response and inside it (the two layouts seen so far differ on which).
+
+## 0.22 (2026-09-29)
+
+- Split View now labels each student's response with a sticky name banner (pinned to the top of the left pane while that student's submission is in view, so it never scrolls away — the next student's banner takes over once you scroll past). Added a "Jump to…" dropdown in the left pane's top bar listing every detected student on the page, so you can go straight to any submission on a multi-student grading page instead of scrolling to find it. Names are detected heuristically — via the student's profile-page link or picture alt text found immediately before their response in the page — since Moodle doesn't expose one reliable class name for this across versions/themes; if a name can't be detected for a given response, it's simply left unlabelled rather than guessed at.
+
+## 0.21 (2026-09-29)
+
+- Fixed: Marking Guide mode wasn't scaling its total to the question's actual max mark — it wrote the raw rubric total straight into the Mark field even when the rubric's own total (e.g. 14) didn't match the question's max (e.g. 15). Rubric and Checklist modes already scaled correctly; Marking Guide's two calls into the mark-writing logic were both missing the rubric's max-possible value, so the `if (maxPossible > 0)` scaling check never ran for it. Fixed both the confirmed-row total and the live-while-typing preview.
+
+## 0.20 (2026-09-29)
+
+- The per-criterion comment box is now bigger by default: 4 rows instead of 2, wider (up to 420px instead of 260px), larger padding and text. Still resizable by dragging the corner.
+
+## 0.19 (2026-09-29)
+
+- Removed the manual "Rescale mark" widget (the "enter the question's max mark, click Rescale" box that used to sit under every table). Grading already auto-detects the question's actual max mark and scales the rubric total into it automatically on every click via `updateMarkFieldForTable()`, so the manual fallback had become dead weight. Also removed its now-unused helper function, lang strings, and CSS.
+
+## 0.18 (2026-09-29)
+
+- Fixed: the per-criterion comment toggle's own "Add comment"/"Save"/"Remove" button text was leaking into the Rubric summary's criterion names (e.g. "Introduction 💬 Add commentSaveRemove (6 marks)"). jQuery's `.text()` includes text from `display:none` elements, and the toggle sits inside the same criterion cell that grading reads the criterion name from — so even hidden, its button labels were being read as part of the name. Every place that reads a criterion/item cell's text now strips the injected comment controls first via a new `cellTextExcludingComment()` helper. Affects Rubric (standard, legacy, and weighted) most visibly; Marking Guide's description-extraction fallback was fixed the same way as a precaution, though its primary extraction path wasn't affected.
+
+## 0.17 (2026-09-29)
+
+- Fixed: Save and Remove on a per-criterion comment (0.16) closed the box but didn't actually refresh the grading summary already written into the comment box — that only happened when a score cell was next clicked, so a comment added or removed after grading appeared to do nothing until the mark was touched. Save and Remove now both re-trigger the same write the score cells do, so the comment box updates immediately.
+
+## 0.16 (2026-09-29)
+
+- Added explicit Save and Remove buttons under each per-criterion comment box (introduced in 0.15), so closing a note no longer requires clicking away from it elsewhere on the page. Save closes the box and marks the toggle as having a saved comment (shown with a highlighted state, and "Edit comment" instead of "Add comment"); Remove clears the text and closes the box.
+
+## 0.15 (2026-09-28)
+
+- Added an optional per-criterion comment: a small "Add comment" toggle now appears next to every criterion/item label (Rubric, Marking Guide and Checklist alike). Clicking it reveals a short textarea for a note on that specific criterion — nothing is shown by default and nothing is required. The "Criterion-specific comments" column in the generated feedback summary is now only included if at least one comment was actually entered for that student, instead of always shipping an empty column as before.
+
 ## 0.14 (2026-09-15)
 
 - Fixed the "Checklist Summary"/"Marking Guide Summary"/"Rubric Grading Summary" title and the closing "Overall comments:" text always showing the Rubric colour regardless of which mode actually generated the summary — they shared one generic CSS rule left over from before per-mode theming existed. Each now explicitly uses its own mode's colour, matching the rest of that summary table.

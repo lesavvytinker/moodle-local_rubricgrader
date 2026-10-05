@@ -59,6 +59,35 @@
                 : fallback;
         },
 
+        // Escapes a plain-text value (a marker's typed comment) for safe
+        // inclusion in the HTML written to the comment box.
+        esc: function(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        },
+        // Same as esc(), but also turns line breaks into <br> so a
+        // multi-line comment keeps its paragraphing once escaped.
+        escNL: function(str) {
+            return this.esc(str).replace(/\r\n|\r|\n/g, '<br>');
+        },
+
+        // Reads a cell's text with the injected per-criterion comment
+        // toggle/textarea (see injectCommentToggles) stripped out first.
+        // jQuery's .text() includes text from display:none descendants —
+        // the comment box is hidden by default but its "Add comment",
+        // "Save"/"Remove" button labels and placeholder are still real text
+        // nodes in the DOM, so reading a criterion/item cell's raw .text()
+        // silently appended them onto the criterion name. Every read of a
+        // label cell that might contain the toggle goes through this.
+        cellTextExcludingComment: function($cell) {
+            if (!$cell || !$cell.length) return '';
+            var $clone = $cell.clone();
+            $clone.find('.rgdr-comment-toggle, .rgdr-comment-wrap').remove();
+            return $clone.text();
+        },
+
         init: function() {
             var self = this;
             self.log('=== INITIALIZING RUBRIC GRADER ===');
@@ -233,7 +262,110 @@
                 self.log('Marking guide detected');
                 self.setupMarkingGuide($table);
             }
-            self.injectRescaleWidget($table);
+            self.injectCommentToggles($table);
+        },
+
+        // Adds a small "add comment" toggle next to each criterion's label,
+        // for Rubric, Marking Guide and Checklist tables alike. Clicking it
+        // reveals a short textarea for a criterion-specific note. Nothing is
+        // typed anywhere by default — the "Criterion-specific comments"
+        // column in the generated summary only appears at all if at least
+        // one of these was actually used (see the buildXXXSummaryHTML
+        // functions), rather than always shipping an empty column.
+        injectCommentToggles: function($table) {
+            var self = this;
+            var mode = $table.hasClass('rgdr-checklist') ? 'checklist' :
+                       ($table.hasClass('rs-marking-guide') || $table.hasClass('rs-wmg')) ? 'markingguide' :
+                       'rubric';
+
+            var $rows;
+            if (mode === 'checklist') {
+                $rows = $table.find('tr.rgdr-cl-item-row');
+            } else if (mode === 'markingguide') {
+                $rows = $table.find('tr.rs-criterion-row');
+            } else {
+                $rows = $table.find('tbody tr, tr').filter(function() {
+                    return $(this).find('.rs-cell').length > 0;
+                });
+            }
+
+            $rows.each(function() {
+                var $row = $(this);
+                if ($row.find('.rgdr-comment-toggle').length) return; // already injected
+
+                var $labelCell;
+                if (mode === 'checklist') {
+                    $labelCell = $row.find('.rgdr-cl-item-label').closest('td');
+                } else if (mode === 'markingguide') {
+                    $labelCell = $row.find('.rs-criterion-label-cell');
+                } else {
+                    $labelCell = $row.find('td:first-child');
+                }
+                if (!$labelCell || !$labelCell.length) $labelCell = $row.find('td').first();
+                if (!$labelCell.length) return;
+
+                var $toggle = $('<button type="button" class="rgdr-comment-toggle">' +
+                    '<span aria-hidden="true">&#128172;</span> <span class="rgdr-comment-toggle-label">' +
+                    self.t('addcomment', 'Add comment') + '</span></button>');
+                var $wrap = $('<div class="rgdr-comment-wrap"></div>').hide();
+                var $textarea = $('<textarea class="rgdr-comment-input" rows="4"></textarea>')
+                    .attr('placeholder', self.t('commentplaceholder', 'Comment for this criterion (optional)'));
+                var $actions = $('<div class="rgdr-comment-actions"></div>');
+                var $saveBtn = $('<button type="button" class="rgdr-comment-save">' + self.t('save', 'Save') + '</button>');
+                var $removeBtn = $('<button type="button" class="rgdr-comment-remove">' + self.t('remove', 'Remove') + '</button>');
+                $actions.append($saveBtn).append($removeBtn);
+                $wrap.append($textarea).append($actions);
+
+                // Reflects whether this criterion currently has a saved
+                // comment in the toggle button itself, so a marker can tell
+                // at a glance which criteria already have a note without
+                // opening every box.
+                function refreshToggleState() {
+                    var has = $.trim($textarea.val()).length > 0;
+                    $toggle.toggleClass('rgdr-comment-toggle--has-comment', has);
+                    $toggle.find('.rgdr-comment-toggle-label').text(
+                        has ? self.t('editcomment', 'Edit comment') : self.t('addcomment', 'Add comment')
+                    );
+                }
+
+                $toggle.on('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $wrap.toggle();
+                    if ($wrap.is(':visible')) $textarea.trigger('focus');
+                });
+
+                // Save closes the box AND re-writes the summary already sitting
+                // in the comment box, if grading has started — otherwise the
+                // comment wouldn't actually show up until the marker next
+                // touched a score cell (which is what re-triggers the write).
+                // updateTotalForTable() is a no-op (just logs and returns) if
+                // nothing's been graded yet, so it's always safe to call.
+                $saveBtn.on('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    refreshToggleState();
+                    $wrap.hide();
+                    self.updateTotalForTable($table);
+                });
+
+                // Remove clears the comment entirely, closes the box, and
+                // refreshes the written summary the same way Save does.
+                $removeBtn.on('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $textarea.val('');
+                    refreshToggleState();
+                    $wrap.hide();
+                    self.updateTotalForTable($table);
+                });
+
+                // Keep clicks inside the comment area from bubbling up into
+                // any row/cell-level handlers (e.g. Checklist's row-toggle).
+                $wrap.on('click mousedown', function(e) { e.stopPropagation(); });
+
+                $labelCell.append($toggle).append($wrap);
+            });
         },
 
         injectSplitViewButton: function() {
@@ -276,12 +408,32 @@
             // Build left panel with iframe showing response only
             var $left = $('<div id="rgdr-split-left-panel"></div>');
             var $iframe = $('<iframe class="rgdr-split-left-frame" src="' + currentUrl + '" title="' + self.t('studentresponsetitle', 'Student response') + '"></iframe>');
-            $left.append('<div class="rgdr-split-left-bar">&#128065; ' + self.t('studentresponsereadonly', 'Student Response (read only)') + '</div>');
+            var $bar = $('<div class="rgdr-split-left-bar"></div>');
+            $bar.append('<span class="rgdr-split-left-bar-label">&#128065; ' + self.t('studentresponsereadonly', 'Student Response (read only)') + '</span>');
+            // Jump-to-student dropdown — populated once names are detected
+            // in the iframe (see injectSplitNames). Lets a marker go straight
+            // to any submission on a multi-submission grading page instead
+            // of hunting for it by scrolling.
+            var $jump = $('<select class="rgdr-split-jump"><option value="">' + self.t('jumptostudent', 'Jump to…') + '</option></select>');
+            $bar.append($jump);
+            $left.append($bar);
             $left.append($iframe);
             $('body').prepend($left);
             $('body').addClass('rgdr-split-active');
 
-
+            $jump.on('change', function() {
+                var idx = $(this).val();
+                if (idx === '') return;
+                try {
+                    var iDoc = $iframe[0].contentDocument || $iframe[0].contentWindow.document;
+                    var target = iDoc.querySelector('[data-rgdr-split-idx="' + idx + '"]');
+                    if (target && target.scrollIntoView) {
+                        target.scrollIntoView({block: 'start'});
+                    }
+                } catch (e) {
+                    self.log('Jump-to-student failed: ' + e.message);
+                }
+            });
 
             // Once iframe loads, inject CSS to show only the student response.
             // Use a delay + !important cascade to survive Moodle's own JS running after load.
@@ -306,7 +458,6 @@
                             '.que .content .submitbtns,',
                             '.que .content .history,',
                             '.que .content .rs-table,',
-                            '.que .content .rgdr-rescale-wrap,',
                             '.que .content .rgdr-split-toggle,',
                             '.que .content input[name*="mark"],',
                             '.que .content label[for*="mark"],',
@@ -315,8 +466,9 @@
                             '.que .content .gradingdetails *,',
                             '.que .content .submitbtns *,',
                             '.que .content .history *,',
-                            '.que .content .rs-table *,',
-                            '.que .content .rgdr-rescale-wrap * { visibility:hidden !important; }',
+                            '.que .content .rs-table * { visibility:hidden !important; }',
+                            '.que .content .rgdr-split-name-banner,',
+                            '.que .content .rgdr-split-name-banner * { visibility:visible !important; }',
                             'body { background:#fff !important; }',
                         'body, html { overflow-x:hidden !important; max-width:100% !important; }',
                         '* { max-width:100% !important; box-sizing:border-box !important; }',
@@ -327,6 +479,8 @@
 
                         iDoc.head.appendChild(style);
                         self.log('iframe CSS applied');
+
+                        self.injectSplitNames(iDoc, $jump);
                     } catch(e) {
                         self.log('iframe CSS failed: ' + e.message);
                     }
@@ -342,102 +496,112 @@
             self.log('Split view on');
         },
 
-        injectRescaleWidget: function($table) {
+        // Finds, and labels, which student each .que response block on the
+        // page belongs to — needed because Moodle's manual grading pages can
+        // list many students' submissions to one question on a single page,
+        // and split view's left pane (see toggleSplitView) shows all of them
+        // stacked, one after another, which is easy to lose track of while
+        // scrolling.
+        //
+        // There's no single reliable class name for "the student's name"
+        // across Moodle versions/themes, so this walks the whole content
+        // area in document order and remembers "the last name seen" as each
+        // .que is reached, using whichever of these patterns it spots first:
+        //  1. Moodle's quiz manual-grading report heading, a plain-text
+        //     (non-link) heading reading "Attempt number N for Full Name
+        //     (email or idnumber)" — this is the actual format confirmed on
+        //     the multi-student grading report page.
+        //  2. A link to /user/view.php (the profile page) — seen on other
+        //     grading interfaces that do link the student's name.
+        //  3. A .userpicture image's alt text ("Picture of Firstname
+        //     Lastname").
+        // If none of these are found before a given .que, it's left
+        // unlabelled rather than guessed at.
+        injectSplitNames: function(iDoc, $jump) {
             var self = this;
-            // Don't add twice
-            if ($table.next('.rgdr-rescale-wrap').length) return;
+            try {
+                var $root = $(iDoc).find('#region-main');
+                if (!$root.length) $root = $(iDoc).find('#page-content');
+                if (!$root.length) $root = $(iDoc.body);
 
-            var $widget = $([
-                '<div class="rgdr-rescale-wrap">',
-                '  <div class="rgdr-rescale-inner">',
-                '    <span class="rgdr-rescale-label">&#9881; ' + self.t('rescalemark', 'Rescale mark') + '</span>',
-                '    <span class="rgdr-rescale-hint">' + self.t('rescalehint', 'Enter the question\'s max mark, then click Rescale to convert the rubric total.') + '</span>',
-                '    <div class="rgdr-rescale-controls">',
-                '      <label class="rgdr-rescale-field-label">' + self.t('maxmarkforquestion', 'Max mark for this question') + '</label>',
-                '      <input class="rgdr-rescale-max" type="number" min="0" step="0.5" placeholder="' + self.t('maxmarkplaceholder', 'e.g. 14') + '">',
-                '      <button type="button" class="rgdr-rescale-btn">' + self.t('rescalebtn', 'Rescale') + '</button>',
-                '      <span class="rgdr-rescale-result" style="display:none;"></span>',
+                var currentName = null;
+                var idx = 0;
+                var options = [];
+                // Matches Moodle's "Attempt number N for Full Name (…)"
+                // grading-report heading, capturing just the name.
+                var attemptHeadingRe = /attempt\s+number\s+\d+\s+for\s+(.+?)\s*(?:\(|$)/i;
 
-                '    </div>',
-                '  </div>',
-                '</div>'
-            ].join(''));
+                $root.find('.que, h1, h2, h3, h4, h5, a[href*="/user/view.php"], .userpicture').each(function() {
+                    var $el = $(this);
 
-            $table.after($widget);
+                    if ($el.is('h1, h2, h3, h4, h5')) {
+                        var headingText = $el.text().trim();
+                        var m = attemptHeadingRe.exec(headingText);
+                        if (m && m[1]) currentName = m[1].trim();
+                        return;
+                    }
+                    if ($el.is('a[href*="/user/view.php"]')) {
+                        var linkText = $el.text().trim();
+                        if (linkText) currentName = linkText;
+                        return;
+                    }
+                    if ($el.hasClass('userpicture')) {
+                        var alt = ($el.attr('alt') || '').replace(/^Picture of\s+/i, '').trim();
+                        if (alt) currentName = alt;
+                        return;
+                    }
+                    // A .que block reached. If its own "Attempt number N for
+                    // Name" heading lives INSIDE it (rather than as a
+                    // preceding sibling — the two page layouts this has been
+                    // seen on differ here), it wouldn't have been picked up
+                    // yet by the walk above, since jQuery visits a parent
+                    // before its own descendants. Check inside this element
+                    // too, so either layout resolves to the right name.
+                    var $ownHeading = $el.find('h1, h2, h3, h4, h5').filter(function() {
+                        return attemptHeadingRe.test($(this).text());
+                    }).first();
+                    if ($ownHeading.length) {
+                        var mOwn = attemptHeadingRe.exec($ownHeading.text().trim());
+                        if (mOwn && mOwn[1]) currentName = mOwn[1].trim();
+                    }
 
-            // Wire up the rescale button
-            $widget.find('.rgdr-rescale-btn').on('click', function() {
-                var maxMark = parseFloat($widget.find('.rgdr-rescale-max').val());
-                if (isNaN(maxMark) || maxMark <= 0) {
-                    alert(self.t('errorinvalidmaxmark', 'Please enter a valid max mark greater than 0.'));
-                    return;
-                }
+                    // Label it with whichever name was found — either just
+                    // now, from inside it, or earlier, from before it.
+                    if (!currentName) return;
+                    var $content = $el.find('.content').first();
+                    if (!$content.length) return;
 
-                // Get current rubric total
-                var total = 0;
-                var maxPossible = 0;
-                if ($table.hasClass('rs-marking-guide')) {
-                    $table.find('tr.rs-criterion-row').each(function() {
-                        total       += parseFloat($(this).find('.rs-score-input').val()) || 0;
-                        maxPossible += parseFloat($(this).find('.rs-max-input').val())   || 0;
+                    if (!$el.attr('data-rgdr-split-idx')) {
+                        $el.attr('data-rgdr-split-idx', String(idx));
+                    }
+                    var thisIdx = $el.attr('data-rgdr-split-idx');
+
+                    if (!$content.find('> .rgdr-split-name-banner').length) {
+                        $content.prepend('<div class="rgdr-split-name-banner">' + self.esc(currentName) + '</div>');
+                    }
+                    options.push({idx: thisIdx, name: currentName});
+                    idx++;
+                });
+
+                if (options.length && $jump && $jump.length) {
+                    var currentVal = $jump.val();
+                    $jump.find('option:not(:first)').remove();
+                    options.forEach(function(o) {
+                        $jump.append('<option value="' + o.idx + '">' + self.esc(o.name) + '</option>');
                     });
-                } else {
-                    // Standard, weighted, or legacy rubric
-                    var isWgt = $table.hasClass('rs-weighted');
-                    var rTotalCols = self.readClassNum($table, 'rs-cols-') ||
-                                     Math.max(0, $table.find('thead tr th, tr:first-child th').length - 1);
-                    $table.find('tr').each(function() {
-                        var $row = $(this);
-                        var $sel = $row.find('.rs-cell.rgdr-selected');
-                        if (!$sel.length) return;
-                        var $critCell = $row.find('td:first-child');
-                        var score, rMax;
-                        if (!isNaN(parseFloat($sel.attr('data-score')))) {
-                            // Legacy: direct score value
-                            score = parseFloat($sel.attr('data-score')) || 0;
-                            rMax  = self.getRowMax($row);
-                            var mfn = self.extractMaxFromCriterionName($critCell.text().trim());
-                            if (mfn !== null) rMax = mfn;
-                        } else {
-                            // New format: position-based, read from classes
-                            rMax = isWgt
-                                ? (self.readClassNum($critCell, 'rs-w-') || parseFloat($critCell.attr('data-weight')) || 0)
-                                : (self.readClassNum($critCell, 'rs-max-') || parseFloat($critCell.attr('data-max')) || self.getRowMaxScore($row));
-                            var colIdx = self.readClassNum($sel, 'rs-col-');
-                            if (colIdx === null) colIdx = parseInt($sel.attr('data-col'));
-                            var fraction = (!isNaN(colIdx) && rTotalCols > 1)
-                                ? (1 - colIdx / (rTotalCols - 1)) : 0;
-                            score = Math.round(fraction * rMax * 100) / 100;
-                        }
-                        total       += score;
-                        maxPossible += rMax;
-                    });
+                    if (currentVal) $jump.val(currentVal);
                 }
-
-                if (maxPossible <= 0) {
-                    alert(self.t('errornoscoresyet', 'No scores entered yet — please complete the rubric first.'));
-                    return;
-                }
-
-                var scaled = Math.round((total / maxPossible) * maxMark * 100) / 100;
-
-                $widget.find('.rgdr-rescale-result').html(
-                    '<strong>' + total + ' / ' + maxPossible + '</strong>' +
-                    ' &rarr; <span class="rgdr-rescale-value">' + scaled + '</span> / ' + maxMark +
-                    ' &nbsp;&mdash;&nbsp; <em>' + self.ta('rescaleenterinstruction', '<strong>' + scaled + '</strong>', 'enter {$a} in the Mark field below') + '</em>'
-                ).show();
-            });
+            } catch (e) {
+                self.log('injectSplitNames failed: ' + e.message);
+            }
         },
 
-        getRowMax: function($row) {
-            // For rubric tables, find the highest data-score in the row
-            var max = 0;
-            $row.find('.rs-cell[data-score]').each(function() {
-                var s = parseFloat($(this).attr('data-score')) || 0;
-                if (s > max) max = s;
-            });
-            return max;
-        },
+        // NOTE: the manual "Rescale mark" widget that used to live here (and
+        // its dedicated getRowMax() helper, now removed as dead code) was
+        // dropped in 0.19 — updateMarkFieldForTable() already auto-detects
+        // the question's actual max mark and scales the rubric total into
+        // it on every click, so the manual "type the max mark and press
+        // Rescale" fallback had become redundant.
 
         setupMarkingGuide: function($table) {
             var self = this;
@@ -458,8 +622,8 @@
                     var mx = parseFloat($row.find('.rs-max-input').val()) || 0;
                     var v  = parseFloat($(this).val());
                     if (!isNaN(v)) {
-                        if (v > mx) $(this).val(mx.toFixed(1));
-                        if (v < 0)  $(this).val('0.0');
+                        if (v > mx) $(this).val(mx.toFixed(2));
+                        if (v < 0)  $(this).val('0.00');
                     }
                     self.updateMarkOnlyForTable($table);
                     $row.find('.rs-confirm-btn').addClass('rs-confirm-btn--dirty');
@@ -489,21 +653,29 @@
             self.log('  raw="' + $si.val() + '" parsed=' + v + ' max=' + mx);
             if (isNaN(v) || v < 0) v = 0;
             else if (v > mx)       v = mx;
-            $si.val(v.toFixed(1));
+            $si.val(v.toFixed(2));
             $row.addClass('rgdr-row-confirmed');
             $btn.removeClass('rs-confirm-btn--dirty').addClass('rs-confirm-btn--done').text('checkmark');
-            self.log('  confirmed=' + v.toFixed(1) + ', calling updateTotalForTable');
+            self.log('  confirmed=' + v.toFixed(2) + ', calling updateTotalForTable');
             self.updateTotalForTable($table);
         },
 
         updateMarkOnlyForTable: function($table) {
             var self = this;
             var t = 0;
+            var mp = 0;
             $table.find('tr.rs-criterion-row').each(function() {
-                t += parseFloat($(this).find('.rs-score-input').val()) || 0;
+                t  += parseFloat($(this).find('.rs-score-input').val()) || 0;
+                mp += parseFloat($(this).find('.rs-max-input').val())   || 0;
             });
-            self.log('updateMarkOnly: ' + t);
-            self.updateMarkFieldForTable($table, t);
+            self.log('updateMarkOnly: ' + t + ' / ' + mp);
+            // Pass maxPossible too, same as the confirmed-row path — omitting
+            // it here meant this live-while-typing preview skipped scaling
+            // to the question's actual max mark entirely (see 0.21 fix to
+            // the equivalent call in updateTotalForTable's marking-guide
+            // branch), so it could show a different, unscaled number than
+            // what a criterion confirm/blur would then overwrite it with.
+            self.updateMarkFieldForTable($table, t, mp);
         },
         
         setupClickHandlers: function() {
@@ -625,10 +797,40 @@
             if ($table.hasClass('rgdr-checklist')) {
                 self.log('  → checklist mode');
                 var currentSection = '';
+                var currentAllOrNone = false;
+                var sectionBuffer = [];
+                var sectionMax = 0, sectionScore = 0, sectionAllAchieved = true, sectionHasItems = false;
+
+                var flushSection = function() {
+                    if (!sectionHasItems) return;
+                    var sectionAwarded = currentAllOrNone ? sectionAllAchieved : null;
+                    var awardedTotal = currentAllOrNone ? (sectionAllAchieved ? sectionScore : 0) : sectionScore;
+                    maxPossible += sectionMax;
+                    total += awardedTotal;
+                    sectionBuffer.forEach(function(entry) {
+                        if (currentAllOrNone) {
+                            entry.allOrNoneSection = true;
+                            entry.sectionAwarded = sectionAwarded;
+                            // Display score reflects whether the section as a
+                            // whole was awarded, not whether this one item
+                            // was individually checked.
+                            entry.score = sectionAwarded ? entry.max : 0;
+                        }
+                        breakdown.push(entry);
+                    });
+                    sectionBuffer = [];
+                    sectionMax = 0;
+                    sectionScore = 0;
+                    sectionAllAchieved = true;
+                    sectionHasItems = false;
+                };
+
                 $table.find('tr.rgdr-cl-section-row, tr.rgdr-cl-item-row').each(function() {
                     var $row = $(this);
                     if ($row.hasClass('rgdr-cl-section-row')) {
+                        flushSection();
                         currentSection = $row.find('.rgdr-cl-section-label').text().trim();
+                        currentAllOrNone = $row.attr('data-allornone') === '1';
                         return;
                     }
                     var itemLabel = $row.find('.rgdr-cl-item-label').text().trim();
@@ -637,17 +839,22 @@
                     var mx = parseFloat($cell.attr('data-score')) || 0;
                     var achieved = $cell.hasClass('rgdr-cl-selected');
                     var sc = achieved ? mx : 0;
-                    maxPossible += mx;
-                    total += sc;
-                    breakdown.push({
+                    var comment = ($row.find('.rgdr-comment-input').val() || '').trim();
+                    sectionHasItems = true;
+                    sectionMax += mx;
+                    sectionScore += sc;
+                    if (!achieved) sectionAllAchieved = false;
+                    sectionBuffer.push({
                         section: currentSection,
                         criterion: itemLabel,
                         description: itemDesc,
                         score: sc,
                         max: mx,
-                        achieved: achieved
+                        achieved: achieved,
+                        comment: comment
                     });
                 });
+                flushSection();
                 self.log('CHECKLIST TOTAL: ' + total + ' / ' + maxPossible);
                 try {
                     self.updateMarkFieldForTable($table, total, maxPossible);
@@ -679,13 +886,20 @@
                     var $labelCell = $row.find('.rs-criterion-label-cell').length
                         ? $row.find('.rs-criterion-label-cell')
                         : $row.find('td').first();
+                    // All three strategies below read the label cell's own
+                    // markup/text — run them against a clone with the
+                    // injected comment toggle (and its own <span> elements
+                    // and hidden text) stripped out first, so it can never
+                    // be mistaken for the criterion's description.
+                    var $cleanLabelCell = $labelCell.clone();
+                    $cleanLabelCell.find('.rgdr-comment-toggle, .rgdr-comment-wrap').remove();
                     // Strategy 1: by class name — read innerHTML to preserve <br> tags
-                    var $descEl = $labelCell.find('.rs-criterion-desc');
+                    var $descEl = $cleanLabelCell.find('.rs-criterion-desc');
                     var desc = $descEl.length ? $descEl.html().trim() : '';
                     self.log('  desc s1 (class): len=' + $descEl.length + ' val="' + desc.substring(0, 40) + '"');
                     // Strategy 2: second span in label cell
                     if (!desc) {
-                        var $spans = $labelCell.find('span');
+                        var $spans = $cleanLabelCell.find('span');
                         self.log('  spans in label cell: ' + $spans.length);
                         if ($spans.length >= 2) {
                             desc = $spans.eq(1).html().trim();
@@ -694,23 +908,25 @@
                     }
                     // Strategy 3: all cell text minus the criterion label (plain text fallback)
                     if (!desc) {
-                        var cellText = $labelCell.text().trim();
+                        var cellText = $cleanLabelCell.text().trim();
                         desc = cellText.replace(criterion, '').trim();
                         self.log('  desc s3 (cell-label): "' + desc.substring(0, 40) + '"');
                     }
                     self.log('  criterion="' + criterion + '" FINAL desc="' + desc.substring(0, 60) + '" score=' + sc + ' max=' + mx);
+                    var mgComment = ($row.find('.rgdr-comment-input').val() || '').trim();
                     maxPossible += mx;
                     total += sc;
                     breakdown.push({
                         criterion: criterion,
                         score: sc,
                         max: mx,
-                        description: desc
+                        description: desc,
+                        comment: mgComment
                     });
                 });
                 self.log('MARKING GUIDE TOTAL: ' + total + ' / ' + maxPossible);
                 try {
-                    self.updateMarkFieldForTable($table, total);
+                    self.updateMarkFieldForTable($table, total, maxPossible);
                 } catch (err) {
                     self.log('❌ updateMarkFieldForTable threw: ' + (err && err.message));
                     if (window.console && console.error) console.error('RubricGrader: updateMarkFieldForTable failed', err);
@@ -753,7 +969,7 @@
                     var weight = self.readClassNum($critCell, 'rs-w-') ||
                                  parseFloat($critCell.attr('data-weight')) || 0;
                     if (!weight) return;
-                    var criterionName = self.extractCriterionName($critCell.text().trim());
+                    var criterionName = self.extractCriterionName(self.cellTextExcludingComment($critCell).trim());
                     var $sel = $row.find('.rs-cell.rgdr-selected');
                     var fraction = 0;
                     if ($sel.length) {
@@ -769,10 +985,11 @@
                     }
                     var contribution = Math.round(fraction * weight * 100) / 100;
                     var description = $sel.length ? $sel.text().trim() : '';
+                    var wComment = ($row.find('.rgdr-comment-input').val() || '').trim();
                     self.log('  Row ' + (idx+1) + ' "' + criterionName + '": fraction=' + fraction.toFixed(2) + ' x ' + weight + '% = ' + contribution);
                     total += contribution;
                     maxPossible += weight;
-                    breakdown.push({criterion: criterionName, score: contribution, max: weight, description: description, isWeighted: true});
+                    breakdown.push({criterion: criterionName, score: contribution, max: weight, description: description, isWeighted: true, comment: wComment});
                 });
             } else {
                 // STANDARD or LEGACY rubric
@@ -793,7 +1010,7 @@
                     if (isLegacy || isNewRubric || rowHasDataScore) {
                         var rm = self.getRowMaxScore($row);
                         if (!isNewRubric) {
-                            var mfn = self.extractMaxFromCriterionName($critCell.text().trim());
+                            var mfn = self.extractMaxFromCriterionName(self.cellTextExcludingComment($critCell).trim());
                             if (mfn !== null) rm = mfn;
                         }
                         return rm;
@@ -820,7 +1037,7 @@
                     var $cell = $(this);
                     var $row = $cell.closest('tr');
                     var $critCell = $row.find('td:first-child');
-                    var criterionText = $critCell.text().trim();
+                    var criterionText = self.cellTextExcludingComment($critCell).trim();
                     var criterionName = self.extractCriterionName(criterionText);
                     var description = $cell.text().trim();
                     var score, rowMax;
@@ -849,10 +1066,11 @@
                     }
 
                     self.log('  Row ' + (idx+1) + ': score=' + score + ' max=' + rowMax);
+                    var rComment = ($row.find('.rgdr-comment-input').val() || '').trim();
                     total += score;
                     // NOTE: maxPossible is no longer accumulated here — it's
                     // computed once above, across every criterion row.
-                    breakdown.push({criterion: criterionName, score: score, max: rowMax, description: description});
+                    breakdown.push({criterion: criterionName, score: score, max: rowMax, description: description, comment: rComment});
                 });
             }
             
@@ -1125,13 +1343,20 @@
         buildMarkingGuideSummaryHTML: function(breakdown, total, maxPossible, isWMG) {
             var self = this;
             var mgc = self.color('markingguide', '#1565C0');
+            // Only include the "Criterion-specific comments" column at all if
+            // the marker actually used the per-criterion comment toggle on at
+            // least one row — otherwise every summary shipped a permanently
+            // empty column, which is what this feature replaces.
+            var hasComments = breakdown.some(function(item) { return item.comment && item.comment.length; });
             var s = '<div class="rgdr-summary rs-mg-feedback-wrap">';
             s += '<p><strong style="color:' + mgc + ';">' + self.t('markingguidesummarytitle', 'Marking Guide Summary') + '</strong></p>';
             s += '<table class="rgdr-mg-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
             s += '<tr style="background-color:' + mgc + ';color:white;">';
             s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionheader', 'Criterion') + '</th>';
             s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
-            s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
+            if (hasComments) {
+                s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
+            }
             s += '</tr>';
             breakdown.forEach(function(item, idx) {
                 var bg = (idx % 2 === 0) ? '#ffffff' : '#f5f8ff';
@@ -1143,16 +1368,21 @@
                 }
                 s += '</td>';
                 s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:120px;border:1px solid #dde3f0;">';
-                s += '<span style="display:inline-block;background:' + mgc + ';color:white;font-weight:700;font-size:1.05em;border-radius:5px;padding:3px 14px;min-width:50px;text-align:center;">' + parseFloat(item.score).toFixed(1) + '</span>';
-                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + (isWMG ? self.ta('weightpercent', parseFloat(item.max).toFixed(0), 'weight: {$a}%') : self.ta('outofmax', parseFloat(item.max).toFixed(1), 'out of {$a}')) + '</span>';
+                s += '<span style="display:inline-block;background:' + mgc + ';color:white;font-weight:700;font-size:1.05em;border-radius:5px;padding:3px 14px;min-width:50px;text-align:center;">' + parseFloat(item.score).toFixed(2) + '</span>';
+                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + (isWMG ? self.ta('weightpercent', parseFloat(item.max).toFixed(0), 'weight: {$a}%') : self.ta('outofmax', parseFloat(item.max).toFixed(2), 'out of {$a}')) + '</span>';
                 s += '</td>';
-                s += '<td style="padding:12px 14px;background-color:#fffde7;vertical-align:top;border:1px solid #dde3f0;min-width:200px;">&nbsp;</td>';
+                if (hasComments) {
+                    s += '<td style="padding:12px 14px;background-color:#fffde7;vertical-align:top;border:1px solid #dde3f0;min-width:200px;">' + (item.comment ? self.escNL(item.comment) : '&nbsp;') + '</td>';
+                }
                 s += '</tr>';
             });
             s += '<tr style="background-color:' + mgc + ';color:white;">';
             s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
-            s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
-            s += '<td style="border:none;"></td></tr>';
+            s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(2) + ' / ' + parseFloat(maxPossible).toFixed(2) + '</td>';
+            if (hasComments) {
+                s += '<td style="border:none;"></td>';
+            }
+            s += '</tr>';
             s += '</table><br><p><strong style="color:' + mgc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
         },
@@ -1165,18 +1395,31 @@
         buildChecklistSummaryHTML: function(breakdown, total, maxPossible) {
             var self = this;
             var clc = self.color('checklist', '#92400e');
+            // Same optional-column rule as Marking Guide and Rubric: only
+            // show a comments column if at least one item actually has one.
+            var hasComments = breakdown.some(function(item) { return item.comment && item.comment.length; });
             var s = '<div class="rgdr-summary rgdr-cl-feedback-wrap">';
             s += '<p><strong style="color:' + clc + ';">' + self.t('checklistsummarytitle', 'Checklist Summary') + '</strong></p>';
             s += '<table class="rgdr-cl-feedback-table" border="1" cellpadding="8" style="width:100%;border-collapse:collapse;font-size:0.92em;">';
             s += '<tr style="background-color:' + clc + ';color:white;">';
             s += '<th style="text-align:left;padding:10px 14px;">' + self.t('itemheader', 'Item') + '</th>';
             s += '<th style="text-align:center;padding:10px 14px;">' + self.t('scoreheader', 'Score') + '</th>';
+            if (hasComments) {
+                s += '<th style="text-align:left;padding:10px 14px;">' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
+            }
             s += '</tr>';
             var lastSection = null;
+            var sectionColspan = hasComments ? 3 : 2;
             breakdown.forEach(function(item, idx) {
                 if (item.section && item.section !== lastSection) {
                     lastSection = item.section;
-                    s += '<tr style="background-color:#fffbeb;"><td colspan="2" style="padding:8px 14px;font-weight:700;color:' + clc + ';border:1px solid #dde3f0;">' + item.section + '</td></tr>';
+                    var sectionBadge = '';
+                    if (item.allOrNoneSection) {
+                        sectionBadge = item.sectionAwarded
+                            ? ' <span style="font-weight:normal;font-size:0.82em;color:#047857;">(' + self.t('allornoneawarded', 'all items checked — full marks') + ')</span>'
+                            : ' <span style="font-weight:normal;font-size:0.82em;color:#b91c1c;">(' + self.t('allornonenotawarded', 'not all items checked — 0 for this section') + ')</span>';
+                    }
+                    s += '<tr style="background-color:#fffbeb;"><td colspan="' + sectionColspan + '" style="padding:8px 14px;font-weight:700;color:' + clc + ';border:1px solid #dde3f0;">' + item.section + sectionBadge + '</td></tr>';
                 }
                 var bg = (idx % 2 === 0) ? '#ffffff' : '#fffdf5';
                 s += '<tr style="background-color:' + bg + ';">';
@@ -1188,17 +1431,23 @@
                 s += '</td>';
                 s += '<td style="padding:12px 14px;text-align:center;vertical-align:top;width:140px;border:1px solid #dde3f0;">';
                 if (item.achieved) {
-                    s += '<span style="display:inline-block;background:' + clc + ';color:white;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10003; ' + parseFloat(item.score).toFixed(1) + '</span>';
+                    s += '<span style="display:inline-block;background:' + clc + ';color:white;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10003; ' + parseFloat(item.score).toFixed(2) + '</span>';
                 } else {
-                    s += '<span style="display:inline-block;background:#e5e7eb;color:#6b7280;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10007; 0.0</span>';
+                    s += '<span style="display:inline-block;background:#e5e7eb;color:#6b7280;font-weight:700;font-size:0.95em;border-radius:5px;padding:4px 12px;">&#10007; 0.00</span>';
                 }
-                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + self.ta('outofmax', parseFloat(item.max).toFixed(1), 'out of {$a}') + '</span>';
+                s += '<span style="display:block;font-size:0.78em;color:#888;margin-top:3px;">' + self.ta('outofmax', parseFloat(item.max).toFixed(2), 'out of {$a}') + '</span>';
                 s += '</td>';
+                if (hasComments) {
+                    s += '<td style="padding:12px 14px;background-color:#fffde7;vertical-align:top;border:1px solid #dde3f0;min-width:200px;">' + (item.comment ? self.escNL(item.comment) : '&nbsp;') + '</td>';
+                }
                 s += '</tr>';
             });
             s += '<tr style="background-color:' + clc + ';color:white;">';
             s += '<td style="padding:10px 14px;text-align:right;font-weight:700;border:none;">' + self.t('totalrow', 'Total') + '</td>';
-            s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(1) + ' / ' + parseFloat(maxPossible).toFixed(1) + '</td>';
+            s += '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:1.1em;border:none;">' + parseFloat(total).toFixed(2) + ' / ' + parseFloat(maxPossible).toFixed(2) + '</td>';
+            if (hasComments) {
+                s += '<td style="border:none;"></td>';
+            }
             s += '</tr>';
             s += '</table><br><p><strong style="color:' + clc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p></div>';
             return s;
@@ -1211,9 +1460,12 @@
             if (!breakdown.length) { self.log('⚠️ Empty breakdown — returning null'); return null; }
             if (!$table || !$table.length) { self.log('⚠️ No $table — returning null'); return null; }
 
+            // Same optional-column rule as Marking Guide and Checklist.
+            var hasComments = breakdown.some(function(item) { return item.comment && item.comment.length; });
+
             var summary = '<div class="rgdr-summary">';
             summary += '<p><strong style="color:' + rc + ';">' + self.t('rubricgradingsummarytitle', 'Rubric Grading Summary') + '</strong></p>';
-            
+
             // Build column headers from the table's thead
             var colHeaders = [];
             var $headerRow = $table.find('thead tr').first();
@@ -1237,7 +1489,9 @@
             colHeaders.forEach(function(h) {
                 summary += '<th style="text-align:center;">' + h + '</th>';
             });
-            summary += '<th>' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
+            if (hasComments) {
+                summary += '<th>' + self.t('criterionspecificcomments', 'Criterion-specific comments') + '</th>';
+            }
             summary += '</tr>';
 
             // One row per breakdown item
@@ -1256,7 +1510,7 @@
                 $table.find('tbody tr, tr').each(function() {
                     var $row = $(this);
                     if (!$row.find('.rs-cell').length) return;
-                    var rowCriterion = self.extractCriterionName($row.find('td:first-child').text().trim());
+                    var rowCriterion = self.extractCriterionName(self.cellTextExcludingComment($row.find('td:first-child')).trim());
                     if (rowCriterion === item.criterion) { $criterionRow = $row; return false; }
                 });
 
@@ -1275,16 +1529,32 @@
                             if (!isNaN(sc)) scoreMap[sc] = i - 1;
                         });
                         for (var ci = 0; ci < numCols; ci++) {
-                            // Find cell in this row whose data-score maps to column ci
-                            var $found = null;
-                            $criterionRow.find('.rs-cell').each(function() {
-                                var sc = parseFloat($(this).attr('data-score'));
-                                if (!isNaN(sc) && scoreMap[sc] === ci) { $found = $(this); return false; }
-                            });
-                            if (!$found) {
-                                // Try positional fallback
-                                $found = $criterionRow.find('td').eq(ci + 1);
-                                if (!$found.hasClass('rs-cell')) $found = null;
+                            // Column alignment is positional FIRST: each row's
+                            // Nth data cell is that row's own score for the
+                            // Nth column, even when different criterion rows
+                            // use entirely different point scales (e.g. a
+                            // 20-mark criterion next to a 10-mark one) — the
+                            // rubric builder explicitly supports "each cell
+                            // has its own score value" per row. Matching by
+                            // raw data-score VALUE against a map built from
+                            // a single "first" row (below) breaks the moment
+                            // two rows don't share identical score values at
+                            // the same column, which is exactly what happens
+                            // with differently-scaled rows: a value that
+                            // happens to appear in a DIFFERENT column of the
+                            // first row gets misattributed, so e.g. a
+                            // selected "2.5" cell can render as if it were
+                            // the "7.5" column instead. Value-matching is now
+                            // only a fallback, for rows that don't have a
+                            // cell at that physical position at all (fewer
+                            // cells than the header has columns).
+                            var $found = $criterionRow.find('td').eq(ci + 1);
+                            if (!$found.length || !$found.hasClass('rs-cell')) {
+                                $found = null;
+                                $criterionRow.find('.rs-cell').each(function() {
+                                    var sc = parseFloat($(this).attr('data-score'));
+                                    if (!isNaN(sc) && scoreMap[sc] === ci) { $found = $(this); return false; }
+                                });
                             }
                             if ($found && $found.length) {
                                 var html2 = $found.html().trim();
@@ -1339,7 +1609,9 @@
                     for (var ci3 = 0; ci3 < numCols; ci3++) { summary += '<td></td>'; }
                 }
 
-                summary += '<td style="background:#fffde7;padding:8px;min-width:200px;">&nbsp;</td>';
+                if (hasComments) {
+                    summary += '<td style="background:#fffde7;padding:8px;min-width:200px;">' + (item.comment ? self.escNL(item.comment) : '&nbsp;') + '</td>';
+                }
                 summary += '</tr>';
             });
 
@@ -1348,10 +1620,12 @@
             var isWgtSummary = breakdown.length > 0 && breakdown[0].isWeighted;
             var maxPossibleSummary = breakdown.reduce(function(s, item) { return s + (parseFloat(item.max) || 0); }, 0);
             maxPossibleSummary = Math.round(maxPossibleSummary * 100) / 100;
+            var totalFixed = parseFloat(total).toFixed(2);
+            var maxPossibleSummaryFixed = maxPossibleSummary.toFixed(2);
             if (isWgtSummary) {
-                summary += '<p><strong>' + self.tm('totalscorelinepercent', {score: total, max: maxPossibleSummary}, 'Total {$a->score} / {$a->max}%') + '</strong></p>';
+                summary += '<p><strong>' + self.tm('totalscorelinepercent', {score: totalFixed, max: maxPossibleSummaryFixed}, 'Total {$a->score} / {$a->max}%') + '</strong></p>';
             } else {
-                summary += '<p><strong>' + self.tm('totalscoreline', {score: total, max: maxPossibleSummary}, 'Total {$a->score} / {$a->max}') + '</strong></p>';
+                summary += '<p><strong>' + self.tm('totalscoreline', {score: totalFixed, max: maxPossibleSummaryFixed}, 'Total {$a->score} / {$a->max}') + '</strong></p>';
             }
             summary += '<br>';
             summary += '<p><strong style="color:' + rc + ';">' + self.t('overallcomments', 'Overall comments:') + '</strong></p>';

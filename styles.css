@@ -550,97 +550,9 @@ body.rgdr-grading-page textarea[name*="comment"] {
 .rs-marking-guide .rs-total-label { text-align: right; }
 .rs-marking-guide .rs-total-value { text-align: center; }
 
-/* ============================================================
-   RESCALE WIDGET
-   ============================================================ */
-.rgdr-rescale-wrap {
-    margin-top: 0;
-    border: 1px solid #e0e7ff;
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    background: #f8faff;
-    padding: 12px 16px;
-}
-
-.rgdr-rescale-inner {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.rgdr-rescale-label {
-    font-weight: 700;
-    font-size: 0.9em;
-    color: #3730a3;
-}
-
-.rgdr-rescale-hint {
-    font-size: 0.82em;
-    color: #6b7280;
-    line-height: 1.4;
-}
-
-.rgdr-rescale-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-}
-
-.rgdr-rescale-field-label {
-    font-size: 0.85em;
-    color: #374151;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.rgdr-rescale-max {
-    width: 90px;
-    border: 1px solid #c7d2fe;
-    border-radius: 5px;
-    padding: 5px 8px;
-    font-size: 0.9em;
-    text-align: center;
-}
-
-.rgdr-rescale-max:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
-}
-
-.rgdr-rescale-btn {
-    background: #4f46e5;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    padding: 6px 16px;
-    font-size: 0.88em;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.rgdr-rescale-btn:hover {
-    background: #4338ca;
-}
-
-.rgdr-rescale-result {
-    font-size: 0.92em;
-    color: #374151;
-    background: #fff;
-    border: 1px solid #e0e7ff;
-    border-radius: 4px;
-    padding: 4px 10px;
-}
-
-.rgdr-rescale-value {
-    color: #1a56db;
-    font-size: 1.05em;
-}
-
-
+/* The manual "Rescale mark" widget that used to live here was removed in
+   0.19 — grading already auto-scales the rubric total into the question's
+   actual max mark on every click, so the manual fallback was redundant. */
 
 /* ============================================================
    CELL SCORE BADGE
@@ -712,6 +624,48 @@ body.rgdr-split-active {
     padding: 10px 18px;
     flex-shrink: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.rgdr-split-left-bar-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Jump-to-student dropdown, populated once names are detected in the
+   iframe (see injectSplitNames). Lets a marker go straight to any
+   submission on a multi-submission grading page. */
+.rgdr-split-jump {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.6);
+    background: #fff;
+    color: #1a237e;
+    max-width: 45%;
+}
+
+/* Sticky per-submission name banner injected inside the iframe (see
+   injectSplitNames). Pins to the top of the scrolling left pane while
+   that student's response is in view, then the next student's banner
+   takes over — so a marker never loses track of whose response they're
+   reading while scrolling through several submissions on one page. */
+.rgdr-split-name-banner {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #1a56db;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 6px 14px;
+    margin: 0 0 10px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .rgdr-split-left-frame {
@@ -735,3 +689,100 @@ body.rgdr-split-active .tox-dialog {
     margin-left: 16.666vw !important; /* centres dialog in right 2/3 */
 }
 
+
+/* ── Per-criterion comment toggle ─────────────────────────────────────── */
+/* Small "Add comment" button injected next to each criterion/item label
+   (Rubric, Marking Guide and Checklist alike) that reveals an optional
+   textarea. Nothing is written to the generated feedback's comments
+   column unless at least one of these is actually filled in. */
+.rgdr-comment-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 2px 8px;
+    font-size: 0.78em;
+    line-height: 1.6;
+    color: #475569;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.rgdr-comment-toggle:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.rgdr-comment-wrap {
+    margin-top: 6px;
+    max-width: 420px;
+}
+
+.rgdr-comment-input {
+    width: 100%;
+    min-width: 260px;
+    max-width: 420px;
+    min-height: 84px;
+    box-sizing: border-box;
+    font-size: 0.92em;
+    font-family: inherit;
+    line-height: 1.4;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    resize: vertical;
+}
+
+.rgdr-comment-input:focus {
+    outline: none;
+    border-color: #64748b;
+    box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
+}
+
+/* Toggle shows a filled/highlighted state once a comment has been saved,
+   so a marker can see at a glance which criteria already have a note. */
+.rgdr-comment-toggle--has-comment {
+    background: #dbeafe;
+    border-color: #60a5fa;
+    color: #1e3a8a;
+    font-weight: 600;
+}
+
+.rgdr-comment-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.rgdr-comment-save,
+.rgdr-comment-remove {
+    font-size: 0.78em;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 1.6;
+}
+
+.rgdr-comment-save {
+    background: #2563eb;
+    border: 1px solid #1d4ed8;
+    color: #ffffff;
+}
+
+.rgdr-comment-save:hover {
+    background: #1d4ed8;
+}
+
+.rgdr-comment-remove {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+}
+
+.rgdr-comment-remove:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #b91c1c;
+}
