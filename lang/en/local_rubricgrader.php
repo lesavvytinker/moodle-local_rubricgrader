@@ -67,3 +67,6 @@ $string['js_save']                  = 'Save';
 $string['js_remove']                = 'Remove';
 $string['js_allornoneawarded']      = 'all items checked — full marks';
 $string['js_allornonenotawarded']   = 'not all items checked — 0 for this section';
+$string['js_restorenotice']         = 'Previous marking loaded — change anything and the summary updates.';
+$string['js_startfresh']            = 'Start with a clean slate';
+$string['js_confirmstartfresh']     = 'Clear the loaded marking and the comment box, and start from a clean slate?';

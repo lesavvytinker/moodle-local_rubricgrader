@@ -1,5 +1,11 @@
 # Changelog — local_rubricgrader
 
+## 0.27 (2026-10-06)
+
+- Re-opening a response that's already been marked now loads that marking back in, instead of giving a clean slate. The summary previously written into the comment box is read back: selected Rubric cells, Marking Guide scores, Checklist ticks and per-criterion comments are all re-applied to the grading table. Nothing is written when it loads — the Mark field and comment box stay exactly as saved until you change something, so you can bump a score or add a comment without redoing the rest. A notice above the table says previous marking was loaded, with a "Start with a clean slate" button (asks first) that clears the table, per-criterion comments and the comment box.
+- Regenerating the summary no longer throws away what you typed under "Overall comments:" (or anything after the summary) — it's now carried across each time the summary is rewritten.
+- Fixed: Checklist summaries for sections flagged "All checked or 0" included the builder's "(All items checked, or 0 for this section)" tag in the section's name; the section name is now read without it.
+
 ## 0.26 (2026-10-05)
 
 - Fixed: the Rubric Grading Summary (standard/legacy rubric formats) could show the wrong score for a selected cell — e.g. a criterion actually graded at 2.5 marks displaying as 7.5 — whenever two criterion rows in the same rubric used different point scales (such as a 20-mark criterion alongside 10-mark ones). The summary matched each cell to its column by its raw score value against a map built from just one "first" row, so a value that happened to reappear in a different column of that first row (7.5 there vs. 2.5 in the actual row) got misattributed. Column matching is now positional first (each row's own cell at that physical position), falling back to the old value-matching only for a row that genuinely has fewer cells than the header.

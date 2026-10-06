@@ -124,6 +124,10 @@
                     var $table = $(this);
                     self.log('Processing table ' + (index + 1));
                     self.setupTable($table);
+                    // If this response was already marked, reload that
+                    // marking into the table so it can be adjusted rather
+                    // than redone from scratch.
+                    self.restoreFromComment($table);
                 });
                 
                 self.setupClickHandlers();
@@ -829,7 +833,7 @@
                     var $row = $(this);
                     if ($row.hasClass('rgdr-cl-section-row')) {
                         flushSection();
-                        currentSection = $row.find('.rgdr-cl-section-label').text().trim();
+                        currentSection = self.checklistSectionName($row);
                         currentAllOrNone = $row.attr('data-allornone') === '1';
                         return;
                     }
@@ -1263,6 +1267,295 @@
             return null;
         },
 
+        // ── Re-opening an already-marked response ───────────────────────
+        // The summary written into the comment box is the only record of a
+        // previous marking pass, so everything below reads it back: it
+        // re-selects the cells / scores / ticks / per-criterion comments in
+        // the grading table WITHOUT writing anything (so a manually-bumped
+        // Mark field or hand-typed overall comments aren't clobbered until
+        // the marker actually changes something).
+
+        // Section heading text for a checklist section row, WITHOUT the
+        // "(All items checked, or 0 ...)" badge the builder may append.
+        checklistSectionName: function($row) {
+            var $label = $row.find('.rgdr-cl-section-label');
+            var $strong = $label.find('strong').first();
+            return ($strong.length ? $strong.text() : $label.text()).trim();
+        },
+
+        // Finds this table's comment textarea (and live TinyMCE, if any)
+        // using the same strict container scoping as writeToCommentArea.
+        findCommentTarget: function($table) {
+            var self = this;
+            var $container = $table.closest('.que, .question, div[class*="question"]');
+            if (!$container.length) $container = $table.closest('form');
+            var $ta = $container.length ? $container.find('textarea[name*="comment"]').first() : $();
+            if (!$ta.length && $('.rs-table').length === 1) {
+                $ta = $('textarea[name*="comment"]').first();
+            }
+            if (!$ta.length) return null;
+            var ed = null;
+            if (typeof tinyMCE !== 'undefined') {
+                ed = self.findTinyMCEForElement($ta[0]) || ($ta.attr('id') ? tinyMCE.get($ta.attr('id')) : null);
+            }
+            return {$ta: $ta, ed: ed};
+        },
+
+        // Keeps whatever the marker typed under "Overall comments:" (and
+        // anything after the summary) when the summary is regenerated.
+        mergeTail: function(existing, newHtml) {
+            var self = this;
+            try {
+                if (!existing || !$.trim(existing)) return newHtml;
+                var $root = $('<div></div>').html(existing);
+                var $sum = $root.find('.rgdr-summary').first();
+                if (!$sum.length) return newHtml;
+                var tail = '';
+                var overall = self.t('overallcomments', 'Overall comments:');
+                var $p = $sum.children('p').filter(function() {
+                    return $(this).text().indexOf(overall) !== -1;
+                }).last();
+                if ($p.length) {
+                    // Text typed on the same line, after the bold heading.
+                    var $clone = $p.clone();
+                    $clone.find('strong').first().remove();
+                    var inline = $.trim($clone.html() || '');
+                    if (inline && inline !== '&nbsp;') tail += '<p>' + inline + '</p>';
+                    $p.nextAll().each(function() { tail += this.outerHTML; });
+                }
+                $sum.nextAll().each(function() { tail += this.outerHTML; });
+                return newHtml + tail;
+            } catch (e) {
+                self.log('mergeTail failed: ' + e.message);
+                return newHtml;
+            }
+        },
+
+        savedCommentText: function($td) {
+            var $c = $td.clone();
+            $c.find('br').replaceWith('\n');
+            return $.trim($c.text());
+        },
+
+        setCommentText: function($row, text) {
+            var self = this;
+            var $ta = $row.find('.rgdr-comment-input').first();
+            if (!$ta.length) return;
+            $ta.val(text);
+            var has = $.trim(text).length > 0;
+            $row.find('.rgdr-comment-toggle').first()
+                .toggleClass('rgdr-comment-toggle--has-comment', has)
+                .find('.rgdr-comment-toggle-label')
+                .text(has ? self.t('editcomment', 'Edit comment') : self.t('addcomment', 'Add comment'));
+        },
+
+        restoreFromComment: function($table) {
+            var self = this;
+            try {
+                var target = self.findCommentTarget($table);
+                if (!target) return;
+                var existing = target.ed ? target.ed.getContent() : target.$ta.val();
+                if (!existing || !$.trim(existing)) return;
+                var $root = $('<div></div>').html(existing);
+                var $sum = $root.find('.rgdr-summary').first();
+                var $saved = ($sum.length ? $sum : $root).find('table').first();
+                if (!$saved.length) return;
+                var n;
+                if ($table.hasClass('rgdr-checklist')) {
+                    n = self.restoreChecklist($table, $saved);
+                } else if ($table.hasClass('rs-marking-guide') || $table.hasClass('rs-wmg')) {
+                    n = self.restoreMarkingGuide($table, $saved);
+                } else {
+                    n = self.restoreRubric($table, $saved);
+                }
+                self.log('restoreFromComment: restored ' + n + ' item(s)');
+                if (n > 0) self.injectRestoreNotice($table);
+            } catch (e) {
+                self.log('restoreFromComment failed: ' + e.message);
+            }
+        },
+
+        restoreRubric: function($table, $saved) {
+            var self = this;
+            var norm = function(s) { return $.trim(String(s).replace(/\s+/g, ' ')); };
+            var clean = function(s) {
+                return norm(self.extractCriterionName(String(s).replace(/\s*\(\s*[\d.]+\s*%\s*\)\s*$/, '')));
+            };
+            var $headerRow = $table.find('thead tr').first();
+            if (!$headerRow.length) $headerRow = $table.find('tr').first();
+            var numCols = Math.max(0, $headerRow.find('th').length - 1);
+            var savedHasComments = $saved.find('tr').first().children('th').length === numCols + 2;
+            var totalWord = self.t('totalrow', 'Total');
+
+            var saved = [];
+            $saved.find('tr').each(function() {
+                var $tds = $(this).children('td');
+                if ($tds.length < 2) return;
+                var label = $.trim($tds.eq(0).find('strong').first().text());
+                if (!label || label === totalWord) return;
+                var selIdx = -1;
+                for (var i = 1; i <= numCols && i < $tds.length; i++) {
+                    if (/^\s*[✓✔]/.test($tds.eq(i).text())) { selIdx = i; break; }
+                }
+                saved.push({
+                    name: clean(label),
+                    selIdx: selIdx,
+                    comment: savedHasComments ? self.savedCommentText($tds.eq($tds.length - 1)) : '',
+                    used: false
+                });
+            });
+
+            var n = 0;
+            $table.find('tbody tr, tr').filter(function() {
+                return $(this).find('.rs-cell').length > 0;
+            }).each(function() {
+                var $row = $(this);
+                var name = clean(self.cellTextExcludingComment($row.find('td:first-child')));
+                var match = null;
+                for (var i = 0; i < saved.length; i++) {
+                    if (!saved[i].used && saved[i].name === name) { match = saved[i]; break; }
+                }
+                if (!match) return;
+                match.used = true;
+                if (match.selIdx > 0) {
+                    var $cell = $row.find('td').eq(match.selIdx);
+                    if ($cell.hasClass('rs-cell')) {
+                        $row.find('.rs-cell').removeClass('rgdr-selected');
+                        $cell.addClass('rgdr-selected');
+                        n++;
+                    }
+                }
+                if (match.comment) self.setCommentText($row, match.comment);
+            });
+            return n;
+        },
+
+        restoreMarkingGuide: function($table, $saved) {
+            var self = this;
+            var norm = function(s) { return $.trim(String(s).replace(/\s+/g, ' ')); };
+            var savedHasComments = $saved.find('tr').first().children('th').length === 3;
+            var saved = [];
+            $saved.find('tr').each(function() {
+                var $tds = $(this).children('td');
+                if ($tds.length < 2) return;
+                var label = norm($tds.eq(0).find('p').first().text());
+                var score = parseFloat($tds.eq(1).find('span').first().text());
+                if (!label || isNaN(score)) return;
+                saved.push({
+                    name: label,
+                    score: score,
+                    comment: savedHasComments ? self.savedCommentText($tds.eq($tds.length - 1)) : '',
+                    used: false
+                });
+            });
+
+            var n = 0;
+            $table.find('tr.rs-criterion-row').each(function() {
+                var $row = $(this);
+                var name = norm($row.find('.rs-criterion-label').text());
+                var match = null;
+                for (var i = 0; i < saved.length; i++) {
+                    if (!saved[i].used && saved[i].name === name) { match = saved[i]; break; }
+                }
+                if (!match) return;
+                match.used = true;
+                var $si = $row.find('.rs-score-input');
+                if ($si.length) {
+                    $si.val(match.score.toFixed(2));
+                    $row.addClass('rgdr-row-confirmed');
+                    $row.find('.rs-confirm-btn').removeClass('rs-confirm-btn--dirty').addClass('rs-confirm-btn--done').text('checkmark');
+                    n++;
+                }
+                if (match.comment) self.setCommentText($row, match.comment);
+            });
+            return n;
+        },
+
+        restoreChecklist: function($table, $saved) {
+            var self = this;
+            var norm = function(s) { return $.trim(String(s).replace(/\s+/g, ' ')); };
+            var savedHasComments = $saved.find('tr').first().children('th').length === 3;
+            var saved = [];
+            var section = '';
+            $saved.find('tr').each(function() {
+                var $tds = $(this).children('td');
+                if ($tds.length === 1 && $tds.eq(0).attr('colspan')) {
+                    var $c = $tds.eq(0).clone();
+                    $c.find('span').remove();
+                    section = norm($c.text());
+                    return;
+                }
+                if ($tds.length < 2) return;
+                var label = norm($tds.eq(0).find('p').first().text());
+                if (!label) return;
+                saved.push({
+                    key: section + '||' + label,
+                    achieved: /[✓✔]/.test($tds.eq(1).text()),
+                    comment: savedHasComments ? self.savedCommentText($tds.eq($tds.length - 1)) : '',
+                    used: false
+                });
+            });
+
+            var n = 0;
+            var current = '';
+            $table.find('tr.rgdr-cl-section-row, tr.rgdr-cl-item-row').each(function() {
+                var $row = $(this);
+                if ($row.hasClass('rgdr-cl-section-row')) {
+                    current = norm(self.checklistSectionName($row));
+                    return;
+                }
+                var key = current + '||' + norm($row.find('.rgdr-cl-item-label').text());
+                var match = null;
+                for (var i = 0; i < saved.length; i++) {
+                    if (!saved[i].used && saved[i].key === key) { match = saved[i]; break; }
+                }
+                if (!match) return;
+                match.used = true;
+                if (match.achieved) {
+                    $row.find('.rgdr-cl-item-cell').addClass('rgdr-cl-selected');
+                    $row.addClass('rgdr-row-confirmed');
+                    n++;
+                }
+                if (match.comment) self.setCommentText($row, match.comment);
+            });
+            return n;
+        },
+
+        injectRestoreNotice: function($table) {
+            var self = this;
+            if ($table.prev('.rgdr-restore-notice').length) return;
+            var $notice = $('<div class="rgdr-restore-notice"></div>');
+            $notice.append($('<span></span>').text(self.t('restorenotice', 'Previous marking loaded — change anything and the summary updates.')));
+            var $btn = $('<button type="button" class="rgdr-restore-clear"></button>')
+                .text(self.t('startfresh', 'Start with a clean slate'));
+            $btn.on('click', function(e) {
+                e.preventDefault();
+                if (!window.confirm(self.t('confirmstartfresh', 'Clear the loaded marking and the comment box, and start from a clean slate?'))) return;
+                self.clearTable($table);
+                self.clearCommentArea($table);
+                $notice.remove();
+            });
+            $notice.append($btn);
+            $table.before($notice);
+        },
+
+        clearTable: function($table) {
+            var self = this;
+            $table.find('.rs-cell').removeClass('rgdr-selected');
+            $table.find('.rgdr-cl-item-cell').removeClass('rgdr-cl-selected');
+            $table.find('tr').removeClass('rgdr-row-confirmed');
+            $table.find('.rs-score-input').val('');
+            $table.find('.rs-confirm-btn').removeClass('rs-confirm-btn--done rs-confirm-btn--dirty').text('Confirm');
+            $table.find('tr').each(function() { self.setCommentText($(this), ''); });
+        },
+
+        clearCommentArea: function($table) {
+            var target = this.findCommentTarget($table);
+            if (!target) return;
+            if (target.ed) target.ed.setContent('');
+            else target.$ta.val('');
+        },
+
         writeToCommentArea: function($table, html) {
             var self = this;
             self.log('writeToCommentArea called, html length=' + html.length);
@@ -1289,14 +1582,14 @@
                         var ed = self.findTinyMCEForElement($ta[0]) || (taId ? tinyMCE.get(taId) : null);
                         if (ed) {
                             self.log('  → TinyMCE (container)');
-                            ed.setContent(html);
+                            ed.setContent(self.mergeTail(ed.getContent(), html));
                             self.expandSpecificEditor(ed);
                             return;
                         }
                         self.log('  ⚠️ textarea found (id=' + taId + ') but no matching TinyMCE instance — writing raw value as fallback (may not appear until the editor reloads)');
                     }
                     self.log('  → textarea (container)');
-                    $ta.val(html);
+                    $ta.val(self.mergeTail($ta.val(), html));
                     return;
                 }
             }
@@ -1315,20 +1608,20 @@
                                       (typeof tinyMCE.get === 'function' ? tinyMCE.get($anyComment.attr('id')) : null);
                     if (specificEd) {
                         self.log('  → TinyMCE (single-table, matched comment textarea directly)');
-                        specificEd.setContent(html);
+                        specificEd.setContent(self.mergeTail(specificEd.getContent(), html));
                         self.expandSpecificEditor(specificEd);
                         return;
                     }
                 }
                 if (typeof tinyMCE !== 'undefined' && tinyMCE.activeEditor) {
                     self.log('  → TinyMCE activeEditor fallback (only one rubric table on page)');
-                    tinyMCE.activeEditor.setContent(html);
+                    tinyMCE.activeEditor.setContent(self.mergeTail(tinyMCE.activeEditor.getContent(), html));
                     self.expandTinyMCE();
                     return;
                 }
                 if ($anyComment.length) {
                     self.log('  → textarea fallback (only one rubric table on page)');
-                    $anyComment.val(html);
+                    $anyComment.val(self.mergeTail($anyComment.val(), html));
                     return;
                 }
             }

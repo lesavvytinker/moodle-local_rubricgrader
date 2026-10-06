@@ -95,6 +95,9 @@ function local_rubricgrader_before_http_headers(): void {
             'remove'                  => get_string('js_remove', 'local_rubricgrader'),
             'allornoneawarded'        => get_string('js_allornoneawarded', 'local_rubricgrader'),
             'allornonenotawarded'     => get_string('js_allornonenotawarded', 'local_rubricgrader'),
+            'restorenotice'           => get_string('js_restorenotice', 'local_rubricgrader'),
+            'startfresh'              => get_string('js_startfresh', 'local_rubricgrader'),
+            'confirmstartfresh'       => get_string('js_confirmstartfresh', 'local_rubricgrader'),
         ];
         foreach ($strings as $key => $value) {
             $value = str_replace('__A__', '{$a}', $value);
