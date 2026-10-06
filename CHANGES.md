@@ -1,5 +1,9 @@
 # Changelog — local_rubricgrader
 
+## 0.28 (2026-10-06)
+
+- Documentation only: README brought up to date with current features (Checklist mode, per-criterion comments, editing existing/previous marking, split-view navigation, colour settings). No functional changes.
+
 ## 0.27 (2026-10-06)
 
 - Re-opening a response that's already been marked now loads that marking back in, instead of giving a clean slate. The summary previously written into the comment box is read back: selected Rubric cells, Marking Guide scores, Checklist ticks and per-criterion comments are all re-applied to the grading table. Nothing is written when it loads — the Mark field and comment box stay exactly as saved until you change something, so you can bump a score or add a comment without redoing the rest. A notice above the table says previous marking was loaded, with a "Start with a clean slate" button (asks first) that clears the table, per-criterion comments and the comment box.
