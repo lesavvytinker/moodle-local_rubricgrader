@@ -98,6 +98,7 @@ function local_rubricgrader_before_http_headers(): void {
             'restorenotice'           => get_string('js_restorenotice', 'local_rubricgrader'),
             'startfresh'              => get_string('js_startfresh', 'local_rubricgrader'),
             'confirmstartfresh'       => get_string('js_confirmstartfresh', 'local_rubricgrader'),
+            'splitresizehint'         => get_string('js_splitresizehint', 'local_rubricgrader'),
         ];
         foreach ($strings as $key => $value) {
             $value = str_replace('__A__', '{$a}', $value);

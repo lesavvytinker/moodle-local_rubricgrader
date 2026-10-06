@@ -390,6 +390,67 @@
             self.log('Split view button injected');
         },
 
+        // Draggable divider between the two split-view panes. The left
+        // pane's width lives in one CSS variable (--rgdr-split-left, set on
+        // <html>) which every split-view rule in styles.css reads, so
+        // moving the divider only has to update that one value. The chosen
+        // width is remembered between pages (browser storage, best-effort).
+        // Double-click resets it; with the divider focused, the left/right
+        // arrow keys nudge it.
+        initSplitDivider: function() {
+            var self = this;
+            var KEY = 'rgdr-split-left-pct';
+            var DEFAULT = 33.333, MIN = 15, MAX = 75;
+            var root = document.documentElement;
+            var pct = DEFAULT;
+            var dragging = false;
+
+            function apply(p) {
+                pct = Math.min(MAX, Math.max(MIN, p));
+                root.style.setProperty('--rgdr-split-left', pct + 'vw');
+            }
+            function save() {
+                try { window.localStorage.setItem(KEY, String(pct)); } catch (e) { /* storage unavailable — fine */ }
+            }
+
+            var saved = NaN;
+            try { saved = parseFloat(window.localStorage.getItem(KEY)); } catch (e) { /* ignore */ }
+            apply(isNaN(saved) ? DEFAULT : saved);
+
+            $('#rgdr-split-divider').remove();
+            var $div = $('<div id="rgdr-split-divider" role="separator" aria-orientation="vertical" tabindex="0"></div>')
+                .attr('title', self.t('splitresizehint', 'Drag to resize the panels (double-click to reset)'));
+            $('body').append($div);
+
+            $div.on('pointerdown', function(e) {
+                e.preventDefault();
+                dragging = true;
+                $('body').addClass('rgdr-split-dragging');
+                try { this.setPointerCapture(e.originalEvent.pointerId); } catch (err) { /* not all browsers */ }
+            });
+            $(document).on('pointermove.rgdrsplit', function(e) {
+                if (!dragging) return;
+                apply(e.clientX / window.innerWidth * 100);
+            });
+            $(document).on('pointerup.rgdrsplit pointercancel.rgdrsplit', function() {
+                if (!dragging) return;
+                dragging = false;
+                $('body').removeClass('rgdr-split-dragging');
+                save();
+            });
+            $div.on('dblclick', function() { apply(DEFAULT); save(); });
+            $div.on('keydown', function(e) {
+                if (e.key === 'ArrowLeft')  { e.preventDefault(); apply(pct - 2); save(); }
+                if (e.key === 'ArrowRight') { e.preventDefault(); apply(pct + 2); save(); }
+            });
+        },
+
+        destroySplitDivider: function() {
+            $('#rgdr-split-divider').remove();
+            $(document).off('.rgdrsplit');
+            document.documentElement.style.removeProperty('--rgdr-split-left');
+        },
+
         toggleSplitView: function() {
             var self = this;
             var $btn = $('#rgdr-split-btn');
@@ -397,8 +458,9 @@
             if ($('body').hasClass('rgdr-split-active')) {
                 // --- EXIT SPLIT VIEW ---
                 // Just remove the CSS class — the live page content is untouched
-                $('body').removeClass('rgdr-split-active');
+                $('body').removeClass('rgdr-split-active rgdr-split-dragging');
                 $('#rgdr-split-left-panel').remove();
+                self.destroySplitDivider();
                 $btn.html('&#9707; ' + self.t('splitviewbtncollapsed', 'Split View'));
                 self.log('Split view off');
                 return;
@@ -424,6 +486,7 @@
             $left.append($iframe);
             $('body').prepend($left);
             $('body').addClass('rgdr-split-active');
+            self.initSplitDivider();
 
             $jump.on('change', function() {
                 var idx = $(this).val();
@@ -1302,28 +1365,89 @@
         },
 
         // Keeps whatever the marker typed under "Overall comments:" (and
-        // anything after the summary) when the summary is regenerated.
+        // anything else after the summary table) when the summary is
+        // regenerated. Everything that follows the table is carried across,
+        // except the generated "Overall comments:" heading itself — which
+        // the new summary brings its own copy of. Text typed on the heading
+        // line is kept too, even though the editor continues the heading's
+        // bold formatting onto it (so it ends up inside the heading's
+        // <strong>, which must not be thrown away along with the heading).
         mergeTail: function(existing, newHtml) {
             var self = this;
             try {
                 if (!existing || !$.trim(existing)) return newHtml;
                 var $root = $('<div></div>').html(existing);
                 var $sum = $root.find('.rgdr-summary').first();
-                if (!$sum.length) return newHtml;
-                var tail = '';
+                var $scope = $sum.length ? $sum : $root;
+                var $table = $scope.find('table').first();
+                if (!$table.length) return newHtml;
                 var overall = self.t('overallcomments', 'Overall comments:');
-                var $p = $sum.children('p').filter(function() {
-                    return $(this).text().indexOf(overall) !== -1;
-                }).last();
-                if ($p.length) {
-                    // Text typed on the same line, after the bold heading.
-                    var $clone = $p.clone();
-                    $clone.find('strong').first().remove();
-                    var inline = $.trim($clone.html() || '');
-                    if (inline && inline !== '&nbsp;') tail += '<p>' + inline + '</p>';
-                    $p.nextAll().each(function() { tail += this.outerHTML; });
-                }
-                $sum.nextAll().each(function() { tail += this.outerHTML; });
+
+                // Strips the generated heading text out of a node, leaving
+                // anything the marker typed alongside it.
+                var cleanHeading = function(node) {
+                    var $c = $(node).clone();
+                    var walker = function(n) {
+                        $(n).contents().each(function() {
+                            if (this.nodeType === 3) {
+                                this.nodeValue = this.nodeValue.replace(overall, '');
+                            } else if (this.nodeType === 1) {
+                                walker(this);
+                            }
+                        });
+                    };
+                    walker($c[0]);
+                    // Drop formatting wrappers the removal left empty.
+                    $c.find('strong, b, em, span').filter(function() {
+                        return !$.trim($(this).text().replace(/ /g, ' ')) && !$(this).find('img, br').length;
+                    }).remove();
+                    var plain = $.trim($c.text().replace(/ /g, ' '));
+                    return plain || $c.find('img').length ? $c[0].outerHTML : '';
+                };
+
+                // The Rubric summary writes its own "Total X / Y" line between
+                // the table and the "Overall comments:" heading. That line is
+                // generated, so it must not be mistaken for something the
+                // marker typed and carried over (it would otherwise pile up
+                // one more copy on every regeneration).
+                var totalPatterns = [];
+                ['totalscoreline', 'totalscorelinepercent'].forEach(function(key) {
+                    var tpl = self.t(key, key === 'totalscoreline' ? 'Total {$a->score} / {$a->max}' : 'Total {$a->score} / {$a->max}%');
+                    var esc = tpl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                                 .replace('\\{\\$a->score\\}', '[\\d.,]+')
+                                 .replace('\\{\\$a->max\\}', '[\\d.,]+');
+                    try { totalPatterns.push(new RegExp('^\\s*' + esc + '\\s*$')); } catch (e) { /* ignore bad pattern */ }
+                });
+                var isGeneratedTotal = function(text) {
+                    text = $.trim(String(text).replace(/\u00a0/g, ' '));
+                    for (var i = 0; i < totalPatterns.length; i++) {
+                        if (totalPatterns[i].test(text)) return true;
+                    }
+                    return false;
+                };
+
+                var tail = '';
+                var collect = function($start) {
+                    $start.nextAll().each(function() {
+                        var tag = this.nodeName.toLowerCase();
+                        if (tag === 'br') return;
+                        if (isGeneratedTotal($(this).text())) return;
+                        if ($(this).text().indexOf(overall) !== -1 && tag !== 'div' && tag !== 'table') {
+                            tail += cleanHeading(this);
+                            return;
+                        }
+                        // Skip empty placeholder paragraphs.
+                        if (tag === 'p' && !$.trim($(this).text().replace(/ /g, ' ')) && !$(this).find('img, table').length) return;
+                        tail += this.outerHTML;
+                    });
+                };
+
+                // The table may be nested a level or two down inside the
+                // summary; start from its ancestor that is a direct child.
+                var $top = $sum.length ? $table.parentsUntil($sum).last() : $table;
+                if (!$top.length) $top = $table;
+                collect($top);
+                if ($sum.length) collect($sum);
                 return newHtml + tail;
             } catch (e) {
                 self.log('mergeTail failed: ' + e.message);

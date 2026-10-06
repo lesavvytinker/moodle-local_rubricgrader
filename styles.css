@@ -594,11 +594,17 @@ body.rgdr-grading-page textarea[name*="comment"] {
 
 /* When split is active, push page content to the right two-thirds */
 body.rgdr-split-active {
-    margin-left: 33.333vw !important;
-    width: 66.666vw !important;
+    margin-left: var(--rgdr-split-left, 33.333vw) !important;
+    width: calc(100vw - var(--rgdr-split-left, 33.333vw)) !important;
     min-width: 0 !important;
     box-sizing: border-box;
-    overflow-x: hidden;
+    /* Must NOT be overflow-x:hidden: on <body> that clips the whole right
+       pane and makes a wide rubric impossible to scroll sideways. Content
+       wider than the right two-thirds now scrolls with the page. */
+    overflow-x: auto;
+}
+html:has(body.rgdr-split-active) {
+    overflow-x: auto;
 }
 
 /* Left panel — fixed, holds the student response iframe (one third) */
@@ -606,7 +612,7 @@ body.rgdr-split-active {
     position: fixed;
     top: 0;
     left: 0;
-    width: 33.333vw;
+    width: var(--rgdr-split-left, 33.333vw);
     height: 100vh;
     z-index: 9999;
     display: flex;
@@ -682,11 +688,11 @@ body.rgdr-split-active .mce-container,
 body.rgdr-split-active .mce-window,
 body.rgdr-split-active .tox-pop,
 body.rgdr-split-active .tox-toolbar-overlord {
-    margin-left: 33.333vw !important;
+    margin-left: var(--rgdr-split-left, 33.333vw) !important;
 }
 /* TinyMCE floating toolbar and dialogs — shift right of left panel */
 body.rgdr-split-active .tox-dialog {
-    margin-left: 16.666vw !important; /* centres dialog in right 2/3 */
+    margin-left: calc(var(--rgdr-split-left, 33.333vw) / 2) !important; /* centres dialog in the right-hand pane */
 }
 
 
@@ -811,3 +817,45 @@ body.rgdr-split-active .tox-dialog {
     font-size: 0.95em;
 }
 .rgdr-restore-clear:hover { background: #e0f2fe; }
+
+/* ── Split view: draggable divider between the two panes ──────────────── */
+#rgdr-split-divider {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--rgdr-split-left, 33.333vw) - 6px);
+    width: 14px;
+    cursor: col-resize;
+    z-index: 10000;
+    background: transparent;
+    touch-action: none;
+    outline: none;
+}
+#rgdr-split-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 10px;
+    height: 56px;
+    margin-top: -28px;
+    border-radius: 5px;
+    background: #fff;
+    border: 2px solid #1a56db;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    box-sizing: border-box;
+}
+#rgdr-split-divider:hover,
+#rgdr-split-divider:focus,
+body.rgdr-split-dragging #rgdr-split-divider {
+    background: rgba(26, 86, 219, 0.22);
+}
+/* While dragging, stop the iframe swallowing the pointer and stop text
+   selection from starting. */
+body.rgdr-split-dragging {
+    user-select: none;
+    cursor: col-resize;
+}
+body.rgdr-split-dragging #rgdr-split-left-panel iframe {
+    pointer-events: none;
+}

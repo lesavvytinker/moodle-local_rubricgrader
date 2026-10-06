@@ -1,5 +1,18 @@
 # Changelog — local_rubricgrader
 
+## 0.31 (2026-10-06)
+
+- Fixed a regression from 0.29: the "Total X / Y" line the Rubric summary writes just above "Overall comments:" was being treated as typed text and carried over, so one more copy appeared under "Overall comments:" every time a cell was clicked. Generated total lines are now recognised and dropped. Copies already piled up in an existing comment are cleaned out the next time the summary regenerates; anything you typed is kept.
+
+## 0.30 (2026-10-06)
+
+- Split View: the two panes can now be resized. Drag the handle on the divider to make the student response or the marking side wider or narrower (15%–75% of the window for the response pane); double-click the handle to reset, or focus it and use the left/right arrow keys. The chosen width is remembered the next time you open Split View.
+
+## 0.29 (2026-10-06)
+
+- Fixed: text typed under "Overall comments:" could disappear when a mark or criterion was changed afterwards. The 0.27 carry-over only kept text that sat in its own paragraph after the heading; if you typed on the heading's own line (where the editor continues the heading's bold formatting, putting your text inside the heading's bold tag) or replaced the heading with your own text, the carry-over discarded it along with the heading. It now keeps everything that follows the summary table, removing only the generated "Overall comments:" wording itself.
+- Fixed: in Split View the right-hand (marking) side couldn't be scrolled sideways, which made wide rubrics unusable. Split View had set the page to hide horizontal overflow; wide content now scrolls normally.
+
 ## 0.28 (2026-10-06)
 
 - Documentation only: README brought up to date with current features (Checklist mode, per-criterion comments, editing existing/previous marking, split-view navigation, colour settings). No functional changes.

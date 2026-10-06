@@ -70,3 +70,4 @@ $string['js_allornonenotawarded']   = 'not all items checked — 0 for this sect
 $string['js_restorenotice']         = 'Previous marking loaded — change anything and the summary updates.';
 $string['js_startfresh']            = 'Start with a clean slate';
 $string['js_confirmstartfresh']     = 'Clear the loaded marking and the comment box, and start from a clean slate?';
+$string['js_splitresizehint']       = 'Drag to resize the panels (double-click to reset)';
